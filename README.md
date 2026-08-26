@@ -23,15 +23,6 @@
 
 ---
 
-## 🎞 演示截图占位（把你自己 demo 运行的截图贴到 docs/screenshots/ 下，替换 home.png / c_demo.png / face_db.png 即可生效）
-| 多路监控主页（A1-A5 已点亮）| C 档演示（聚集 / 离岗 / 夜间）| 人脸库（A3/B1 单帧+多帧）|
-|---------------------------|-------------------------------|-----------------------|
-| ![home](docs/screenshots/home.png) | ![c_demo](docs/screenshots/c_demo.png) | ![faces](docs/screenshots/face_db.png) |
-
-> 演示截图**占位文件未生成**（避免伪造数据）：请在你自己电脑上 `python main.py` 真正跑起来后，用 Win+Shift+S 截三张图，分别存为 `docs/screenshots/home.png` / `c_demo.png` / `face_db.png`，这样仓库上展示的就是**你真实的系统界面**，更有说服力。
-
----
-
 ## 🎯 功能总览（A/B/C 三档 · 13 条 · 毕业设计分级展示）
 
 ### A 档（基础功能 · 必过项）
