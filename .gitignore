@@ -1,0 +1,66 @@
+# ====== Python ======
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+*.egg-info/
+*.egg
+dist/
+build/
+eggs/
+.eggs/
+wheels/
+# 第三方 whl 太大且都有官方下载源，不放仓库（老师/协作者按 requirements.txt 指引下就行）
+*.whl
+
+# ====== 临时脚本（仅本地调试用）======
+test_*.py
+run_pyi.py
+build_exe*.ps1
+build_exe*.cmd
+
+# ====== Virtual Env / IDE ======
+venv/
+.yenv/
+env/
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ====== PyInstaller ======
+*.spec
+build_exe.log
+pyi_stdout.log
+pyi_stderr.log
+
+# ====== Application runtime data (隐私 + 大文件 + 运行日志，默认全部不进 GitHub) ======
+data/logs/
+data/backups/
+data/snapshots/
+data/records/
+data/motions/
+data/faces/
+data/face_db.json
+data/config.json
+
+# ====== 大型模型权重 / ONNX 运行时模型，仓库不放二进制 ======
+best.pt
+best.onnx
+*.engine
+*.trt
+*.safetensors
+
+# ====== dlib 预训练模型（大文件且有官方下载源，README 说明获取方式即可）======
+models/shape_predictor_68_face_landmarks.dat
+models/dlib_face_recognition_resnet_model_v1.dat
+
+# ====== 敏感配置备份 / 临时交付产物 ======
+*.bak
+*.zip
+*.7z
+*.rar
+~$*.pptx
