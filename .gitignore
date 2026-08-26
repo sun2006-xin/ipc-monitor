@@ -1,0 +1,70 @@
+# ===== Python / Bytecode =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ===== Virtual Environment (让使用者自己建 venv，用户说"依赖库让他们自己下") =====
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# ===== IDE / OS =====
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ===== Qt / PyInstaller 打包产物 =====
+*.spec
+.spec.bak
+__pyinstaller/
+dist/
+build/
+*.exe
+*.dll
+*.pdb
+*.manifest
+
+# ========== 🔴 敏感 & 隐私数据：绝对不要放进 Git（毕设作者的真实人脸/录像/账号密码） ==========
+data/config.json
+data/face_db.json
+data/logs/*.log
+data/logs/*.err
+data/backups/*.json
+data/faces/*.jpg
+data/faces/*.jpeg
+data/faces/*.png
+data/motions/*.jpg
+data/snapshots/*.jpg
+data/snapshots/*.png
+data/records/*.mp4
+data/records/*.avi
+data/cache/
+data/.cache/
+
+# ========== ✅ 已放行（实测 4 权重全部 < GitHub 100MB 免费上限，clone 后直接跑无需额外下载）==========
+# best.pt                                    54.13 MB  YOLOv5 人脸检测权重（作者毕设训练版，已开源）
+# best.onnx                                  27.21 MB  YOLOv5 人脸检测 ONNX（cv2.dnn CPU 兜底）
+# models/shape_predictor_68_face_landmarks.dat   95.08 MB  dlib 68 点关键点模型
+# models/dlib_face_recognition_resnet_model_v1.dat 21.43 MB dlib 128D 人脸识别 ResNet v1
+# （以上 4 个合计 ≈198 MB，放 Git 不触发 GH001 报错。若未来版本超过 100MB，才需改走 Release Assets）
+
+# ========== 🔴 未知/大尺寸模型：保留排除（避免用户随手扔进来其他 >100MB 模型直接 push 失败）==========
+models/*.dat.bak
+*.pth
+*.bin
+*.safetensors
+*.gguf
+*.ggml
+*.ckpt
