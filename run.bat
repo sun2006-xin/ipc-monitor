@@ -28,7 +28,7 @@ set EXITCODE=%ERRORLEVEL%
 echo.
 echo ===========================================
 echo 程序已退出 ExitCode=%EXITCODE%
-echo   (如果 0 正常关闭；否则请把上面红色错误截图发给作者)
+echo   (如果 0 正常关闭；否则请保存上方错误信息用于排查)
 echo ===========================================
 pause
 endlocal

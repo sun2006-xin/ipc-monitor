@@ -36,7 +36,7 @@ build/
 *.pdb
 *.manifest
 
-# ========== 🔴 敏感 & 隐私数据：绝对不要放进 Git（毕设作者的真实人脸/录像/账号密码） ==========
+# ===== Sensitive local data: never commit camera credentials, faces, recordings, or logs =====
 data/config.json
 data/face_db.json
 data/logs/*.log
@@ -54,7 +54,7 @@ data/cache/
 data/.cache/
 
 # ========== ✅ 已放行（实测 4 权重全部 < GitHub 100MB 免费上限，clone 后直接跑无需额外下载）==========
-# best.pt                                    54.13 MB  YOLOv5 人脸检测权重（作者毕设训练版，已开源）
+# best.pt                                    54.13 MB  optional YOLOv5 face detector
 # best.onnx                                  27.21 MB  YOLOv5 人脸检测 ONNX（cv2.dnn CPU 兜底）
 # models/shape_predictor_68_face_landmarks.dat   95.08 MB  dlib 68 点关键点模型
 # models/dlib_face_recognition_resnet_model_v1.dat 21.43 MB dlib 128D 人脸识别 ResNet v1
@@ -68,3 +68,18 @@ models/*.dat.bak
 *.gguf
 *.ggml
 *.ckpt
+
+# ===== Local build/release and documentation-generation artifacts =====
+/6.10.0
+/IPC-Monitor.exe
+/ipc_monitor_exe.zip
+/ipc_monitor_open/
+/build_err.txt
+/build_log*.txt
+/generate_doc.py
+/sanitize_open_source.py
+/OPENSOURCE_GUIDE.md
+/docs/image_prompts.md
+/docs/poster_overview.png
+/docs/structure_diagram.png
+/docs/algorithm_detail.png

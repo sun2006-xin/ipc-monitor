@@ -17,8 +17,8 @@ flowchart LR
     %% ====================== 输入层 ======================
     subgraph INPUT["📡 输入层：多路 RTSP 摄像头"]
         direction LR
-        CAM1["🌐 摄像头1<br>rtsp://...@192.168.1.100"]
-        CAM2["🌐 摄像头2<br>rtsp://...@192.168.1.101"]
+        CAM1["🌐 摄像头1<br>rtsp://...@camera-a.local"]
+        CAM2["🌐 摄像头2<br>rtsp://...@camera-b.local"]
         CAMN["🌐 ...<br>最多 16 路 4×4"]
     end
 
@@ -40,8 +40,8 @@ flowchart LR
         MW --> TB
 
         %% 弹窗对话
-        FM["FaceManagerDialog<br>A3 单帧注册 · B1 10 帧多帧平均 · B3 人脸出现记录 QSplitter"]:::gui
-        EH["EventHistoryDialog<br>A5 9 类型筛选 · UTF-8 BOM CSV 导出"]:::gui
+        FM["FaceManagerDialog<br>单帧注册 · 10 帧多帧平均 · 人脸出现记录"]:::gui
+        EH["EventHistoryDialog<br>事件筛选 · UTF-8 BOM CSV 导出"]:::gui
         MW --> FM & EH
     end
 
@@ -76,7 +76,7 @@ flowchart LR
     end
 
     %% ====================== 告警联动层 ======================
-    subgraph ALARM["🚨 A4/A5 告警联动（单入口）"]
+    subgraph ALARM["🚨 告警联动（单入口）"]
         SND["🔔 winsound A4 告警音 + 一键静音"]:::alarm
         SBAR["🟥 status_bar 3s 红底后自动还原浅色"]:::alarm
         HISTORY["📜 A5 事件历史落库 + 9 类型过滤"]:::alarm
