@@ -3,12 +3,18 @@ import os
 import shutil
 from datetime import datetime
 import uuid
+from core.app_paths import R, U
+
 
 class ConfigManager:
-    def __init__(self, config_path="data/config.json", backup_path="data/backups/"):
-        self.config_path = config_path
-        self.backup_path = backup_path
-        os.makedirs(backup_path, exist_ok=True)
+    def __init__(self, config_path=None, backup_path=None):
+        # PyInstaller EXE 兼容：配置和备份都是"用户可写"的，绝对不能落到 _MEIPASS 临时目录
+        self.config_path = config_path if config_path else U("data/config.json")
+        self.backup_path = backup_path if backup_path else U("data/backups/")
+        try:
+            os.makedirs(self.backup_path, exist_ok=True)
+        except Exception:
+            pass
         self.config = self.load()
 
     def load(self):
@@ -28,24 +34,9 @@ class ConfigManager:
             json.dump(self.config, f, indent=2, ensure_ascii=False)
 
     def default_config(self):
-        """
-        ⚠ 开源脱敏默认值（避免把作者内网真实 IP / 密码 / 摄像头名带到开源仓库）
-        用户首次启动看到示例设备，在 UI「设置」界面直接改成自己的即可。
-        """
+        """Return a privacy-safe configuration with no preset camera."""
         return {
-            "devices": [
-                {
-                    "id": str(uuid.uuid4()),
-                    "name": "示例-客厅摄像头",            # ← 示例设备名，用户改成自己摄像头的名字即可
-                    "username": "admin",                  # ← 新增字段：摄像头登录用户名（之前硬编码admin，现可自定义）
-                    "ip": "192.168.1.100",                # ← 示例内网 IP（保留段 192.168.1.100），用户替换为真实 IP
-                    "password": "your_password_here",     # ← 占位符，用户请填写摄像头实际登录密码
-                    "port": 554,                          # ← 新增字段：RTSP 端口（海康默认 554）
-                    "stream": "stream1",
-                    "online": False,                      # ← 默认不在线（示例IP不可能真连上，避免误导）
-                    "enabled": True
-                }
-            ],
+            "devices": [],
             "layout": {"rows": 2, "cols": 2},
             "detection": {
                 "face_interval": 5,
@@ -56,12 +47,12 @@ class ConfigManager:
             },
             "alarm": {
                 "sound_enabled": True,
-                "sound_file": "resources/sounds/alarm.wav",
+                "sound_file": R("resources/sounds/alarm.wav"),
                 "popup_enabled": False,
                 "status_bar_style": "red"
             },
             "language": "zh",
-            "recording": {"save_path": "data/records"},
+            "recording": {"save_path": U("data/records")},
             "logs": {"max_size_mb": 50, "max_backup": 5}
         }
 
@@ -104,8 +95,8 @@ class ConfigManager:
     @staticmethod
     def redact_rtsp(url: str) -> str:
         """
-        🛡 开源打印日志前 脱敏：rtsp://admin:real_password@192.168.1.100:554/stream1
-                                       → rtsp://admin:****@192.168.1.100:554/stream1
+        🛡 开源打印日志前 脱敏：rtsp://<user>:<secret>@<camera-host>:554/stream
+                                       → rtsp://<user>:****@<camera-host>:554/stream
         """
         if not isinstance(url, str) or '://' not in url:
             return url

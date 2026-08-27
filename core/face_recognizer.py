@@ -7,6 +7,8 @@ from datetime import datetime
 import urllib.request
 import bz2
 from pathlib import Path
+from core.app_paths import R, U, BUNDLE_ROOT
+
 
 # ================================================================
 # 第一级兜底：dlib 顶层 import 必须 try 化
@@ -26,8 +28,8 @@ except Exception as _e:
 
 
 class FaceRecognizer:
-    def __init__(self, db_path="data/face_db.json", tolerance=0.6):
-        self.db_path = db_path
+    def __init__(self, db_path=None, tolerance=0.6):
+        self.db_path = db_path if db_path else U("data/face_db.json")
         self.tolerance = tolerance
         self.known_faces = []
         # dlib 不可用时 detector/predictor/face_rec_model 全置 None，绝不使用未定义名
@@ -46,15 +48,16 @@ class FaceRecognizer:
         self.load_db()
 
     # ------------------------------------------------------------
-    # 模型路径多候选：不依赖单一 cwd，老师从任何目录双击都能找到
+    # 模型路径多候选：优先 BUNDLE_ROOT/_MEIPASS（打包已内置 2 个 dlib 权重）→ EXE 同级/models → cwd
+    #   下载兜底：仅当所有候选都不存在时，下载到「用户写目录 / USER_DATA_ROOT/models」（不然写到 _MEIPASS 下次又重下）
     # ------------------------------------------------------------
     @staticmethod
     def _resolve_model(filename: str):
+        exe_dir = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else None
         base_dirs = [
-            Path.cwd() / "models",
-            Path(__file__).resolve().parent.parent / "models",
-            Path(sys.executable).resolve().parent / "models" if getattr(sys, 'frozen', False) else None,
-            Path.cwd().parent / "models",
+            BUNDLE_ROOT / "models",                         # 首选：源码 / EXE _MEIPASS 内置
+            exe_dir / "models" if exe_dir else None,         # 用户把权重放到 EXE 同级 / models
+            Path.cwd() / "models",                           # cwd / models
         ]
         for bd in base_dirs:
             if bd is None:
@@ -65,9 +68,13 @@ class FaceRecognizer:
                     return str(p)
             except Exception:
                 continue
-        # fallback: 默认相对 cwd/models（不存在则由 _load_models 触发下载）
-        os.makedirs("models", exist_ok=True)
-        return os.path.join("models", filename)
+        # fallback：下载写入「用户可写目录/models」，而不是写到 NUL _MEIPASS
+        download_dir = Path(U("models"))
+        try:
+            os.makedirs(str(download_dir), exist_ok=True)
+        except Exception:
+            pass
+        return str(download_dir / filename)
 
     def _load_models(self):
         predictor_path = FaceRecognizer._resolve_model("shape_predictor_68_face_landmarks.dat")
@@ -281,7 +288,7 @@ class FaceRecognizer:
             return None
 
     # ------------------------------------------------------------
-    # B1 · 多帧平均人脸注册（减少单帧误判，毕设加分点）
+    # B1 · 多帧平均人脸注册（减少单帧误判）
     # 用法：register_face_multi("张三", frames_list, num_frames=10, min_frames=5)
     #   frames 可以是 list[np.ndarray(BGR帧)], 也可以是 list[bbox + frame 的 tuple(frame, bbox)]
     #   内部逐帧算 descriptor → 至少 min_frames 个成功 → np.mean 取 128 维均值 → 写入 face_db.json

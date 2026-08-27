@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt, QUrl
 from PyQt5.QtGui import QPixmap, QDesktopServices
+from core.app_paths import U
 
 class ReplayDialog(QDialog):
     def __init__(self, parent=None):
@@ -43,16 +44,26 @@ class ReplayDialog(QDialog):
 
         self.scan_files()
 
+    # ----------------------------------------------------------------
+    # 每次显示时自动重新扫描：避免缓存旧空列表（首次打开时可能还没有录像）
+    # ----------------------------------------------------------------
+    def showEvent(self, event):
+        try:
+            self.scan_files()
+        except Exception:
+            pass
+        super().showEvent(event)
+
     def scan_files(self):
         self.file_list.clear()
         self.preview_label.clear()
         self.preview_label.setText("选择文件预览")
 
         base_dirs = [
-            ("data/snapshots", "截图"),
-            ("data/records", "录像"),
-            ("data/motions", "运动触发"),
-            ("data/faces", "人脸触发")
+            (U("data/snapshots"), "截图"),
+            (U("data/records"), "录像"),
+            (U("data/motions"), "运动触发"),
+            (U("data/faces"), "人脸触发")
         ]
 
         for subdir, label in base_dirs:

@@ -166,7 +166,7 @@ class MainWindow(QMainWindow):
         # ================================================================
         # A4：告警音 + 静音开关（不依赖 torch，用系统 winsound.MessageBeep，Windows 自带无需音频文件）
         #   - 任何事件（face/motion/后续 stranger）触发时响一声系统告警音
-        #   - 按下"🔇 已静音"→ 后续告警静默，不打扰答辩/夜间挂机
+        #   - 按下"🔇 已静音"→ 后续告警静默，适合夜间静默运行
         # ================================================================
         self.alarm_mute_btn = QPushButton("🔔 告警音")
         self.alarm_mute_btn.setCheckable(True)
@@ -220,7 +220,7 @@ class MainWindow(QMainWindow):
         # ================================================================
         self.btn_device_alarm = QPushButton("📡 上下线告警")
         self.btn_device_alarm.setCheckable(True)
-        self.btn_device_alarm.setChecked(True)   # 默认开（毕设演示"把摄像头拔了马上有一条离线告警"好看）
+        self.btn_device_alarm.setChecked(True)   # 默认开启设备上下线提醒
         self.btn_device_alarm.setToolTip("设备从在线→离线或离线→在线时，自动写一条事件历史 + 响告警音")
         toolbar.addWidget(self.btn_device_alarm)
         # ================================================================
@@ -732,7 +732,7 @@ class MainWindow(QMainWindow):
         self._restore_style_later()
 
         # A4：事件触发响告警音（与 🔔/🔇 静音开关联动，静默时不响）
-        #     原来的 QApplication.beep() 没有静音能力，夜间挂机/答辩时会吵；改为统一走 _play_alarm_sound，失败静默降级
+        #     原来的 QApplication.beep() 没有静音能力，持续运行时可能打扰用户；改为统一走 _play_alarm_sound，失败静默降级
         self._play_alarm_sound()
 
         self.logger.info(f"事件触发: {channel} - {event_type}")

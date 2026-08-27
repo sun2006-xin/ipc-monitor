@@ -1,8 +1,13 @@
 import sys
 import os
+import importlib
 import cv2
 import numpy as np
 from pathlib import Path
+from core.app_paths import R, BUNDLE_ROOT
+
+# 把 BUNDLE_ROOT 也当全局常量导出来，face_engine 内部候选路径构造直接复用
+PROJECT_ROOT_CANDIDATE = BUNDLE_ROOT
 
 # ================================================================
 # 第一级兜底：torch DLL 兼容性兜底
@@ -13,13 +18,6 @@ from pathlib import Path
 torch = None
 _TORCH_OK = False
 _TORCH_ERR = ""
-try:
-    import torch as _torch_mod
-    torch = _torch_mod
-    _TORCH_OK = True
-except Exception as _e:
-    _TORCH_ERR = str(_e)
-    print(f"[FaceEngine] [WARN] torch import failed (demo OK, detect/recognition OFF): {_TORCH_ERR}")
 
 
 # ================================================================
@@ -41,20 +39,14 @@ except Exception as _e:
 # --- 方案 ①：ultralytics.YOLO（用户机器已装，首选！）---
 _ULTRALYTICS_OK = False
 UltralyticsYOLO = None
-try:
-    from ultralytics import YOLO as _UltralyticsYOLOCls
-    UltralyticsYOLO = _UltralyticsYOLOCls
-    _ULTRALYTICS_OK = True
-except Exception as _e:
-    print(f"[FaceEngine] [WARN] ultralytics import failed: {_e} (will try old DetectMultiBackend)")
 
 # --- YOLOv5 路径兼容（方案 ② DetectMultiBackend 用）---
 _candidate_paths = [
-    Path(__file__).resolve().parent.parent / "yolov5",
-    Path(__file__).resolve().parent.parent,
+    PROJECT_ROOT_CANDIDATE / "yolov5",
+    PROJECT_ROOT_CANDIDATE,
     Path.cwd() / "yolov5",
     # 兜底：如果用户自己单独克隆了 yolov5，放在 <PROJECT_ROOT>/../yolov5 同级目录也能被扫到
-    Path(__file__).resolve().parent.parent.parent / "yolov5",
+    PROJECT_ROOT_CANDIDATE.parent / "yolov5",
 ]
 for _p in _candidate_paths:
     try:
@@ -83,7 +75,27 @@ if _TORCH_OK:
         print(f"[FaceEngine] [WARN] YOLOv5 source modules not found -> skip DetectMultiBackend (demo OK, will use ultralytics)")
 
 # --- 方案 ③ torch.hub.load 兜底标志 ---
-_HUB_OK = _TORCH_OK  # （只要 torch 装了就有 hub 能力，实际执行时再 try）
+_HUB_OK = False
+
+
+def _load_optional_torch_backend():
+    """ONNX 失败时才加载重型可选依赖，避免正常启动受 DLL 问题影响。"""
+    global torch, _TORCH_OK, _TORCH_ERR, _ULTRALYTICS_OK, UltralyticsYOLO, _HUB_OK
+    if _TORCH_OK:
+        return True
+    try:
+        _torch_mod = importlib.import_module("torch")
+        _UltralyticsYOLOCls = importlib.import_module("ultralytics").YOLO
+        torch = _torch_mod
+        UltralyticsYOLO = _UltralyticsYOLOCls
+        _TORCH_OK = True
+        _ULTRALYTICS_OK = True
+        _HUB_OK = True
+        return True
+    except Exception as exc:
+        _TORCH_ERR = str(exc)
+        print(f"[FaceEngine] [WARN] optional PyTorch backend unavailable: {_TORCH_ERR}")
+        return False
 
 # 第三级兜底：FaceRecognizer（dlib）try 化
 _FACE_REC_OK = True
@@ -102,7 +114,9 @@ class FaceEngine:
     三种方案任意一种成功即可 loaded=True；全部失败则 loaded=False（演示模式，不崩）。
     """
 
-    def __init__(self, weights_path="best.pt", conf_thres=0.25, device="cpu"):
+    def __init__(self, weights_path=None, conf_thres=0.25, device="cpu"):
+        if weights_path is None:
+            weights_path = R("best.pt")
         self.conf_thres = conf_thres
         self._torch_device_name = device
         self.device = None
@@ -118,24 +132,23 @@ class FaceEngine:
         self.recognizer = None
         self.names = {0: 'face'}   # 人脸权重数据集里 class 0 = face
 
-        # ---------- 第四级兜底：若 torch/DLL 本身就不可用，直接 WARN 退出 ----------
-        if (not _TORCH_OK) or (torch is None):
-            print(f"[FaceEngine] [ERR] torch not available -> detect OFF (demo continues): {_TORCH_ERR}")
-            self.loaded = False
-        else:
-            # 多候选权重路径（项目根/cwd/frozen exe 根/绝对路径）—— 兼容老师机器双击 EXE 场景
+        # OpenCV DNN + ONNX 是稳定、轻量的默认后端；PyTorch 只作为失败后的可选兜底。
+        if True:
+            # 多候选权重路径（BUNDLE_ROOT: 源码=项目根，EXE=_MEIPASS；再叠加 cwd / exe同级 作为兜底用户侧权重）
             wp = None
+            exe_dir = Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else None
             base_dirs = [
-                Path(__file__).resolve().parent.parent,
-                Path.cwd(),
-                Path(sys.executable).resolve().parent if getattr(sys, 'frozen', False) else None,
+                PROJECT_ROOT_CANDIDATE,              # 首选：PyInstaller 已解压权重到这里
+                Path.cwd(),                          # 用户 cwd
+                exe_dir,                             # 用户把权重放到 EXE 同级（覆盖内置）
             ]
             candidates_w = []
             for bd in base_dirs:
                 if bd is None:
                     continue
-                candidates_w.append(bd / weights_path)
-            if not Path(weights_path).is_absolute():
+                candidates_w.append(bd / Path(weights_path).name)   # bd/best.pt
+                candidates_w.append(bd / "models" / Path(weights_path).name)  # bd/models/best.pt
+            if Path(weights_path).is_absolute():
                 candidates_w.append(Path(weights_path))
             else:
                 candidates_w.append(Path(weights_path))
@@ -152,22 +165,7 @@ class FaceEngine:
                 self.loaded = False
             else:
                 print(f"[FaceEngine] [OK] using weights: {wp}")
-                self.device = torch.device(device)
-                # --- 方案 ①：ultralytics.YOLO（用户机器已装 8.4.93，优先） ---
-                if _ULTRALYTICS_OK and UltralyticsYOLO is not None:
-                    try:
-                        self.model = UltralyticsYOLO(str(wp))
-                        # ultralytics YOLO 对象不需要手动 to(device)，predict 会传 device
-                        self.names = getattr(self.model, 'names', {}) or {}
-                        self._use_ultralytics = True
-                        self.loaded = True
-                        print(f"[FaceEngine] [OK] YOLO loaded via ultralytics (device={device})")
-                    except Exception as e:
-                        print(f"[FaceEngine] [WARN] ultralytics load failed: {e} -> try fallback DetectMultiBackend")
-                        self.model = None
-                        self._use_ultralytics = False
-
-                # --- 方案 ①.5 · v5 新增：best.onnx（cv2.dnn.readNetFromONNX 纯 CPU 推理，YOLOv5 格式 100% 兼容）---
+                # --- 方案 ①：best.onnx + OpenCV DNN（默认，不依赖 PyTorch）---
                 #   触发条件：方案 ① ultralytics YOLOv8 拒绝加载（因为 best.pt 是 YOLOv5 格式）。
                 #   28.5MB best.onnx 已经在项目根，cv2.dnn 随 opencv-python 自带（不用额外装 onnxruntime），无网络依赖。
                 #   推理走 YOLOv5 letterbox + 输出 [1,25200,6]（x,y,w,h, obj_conf, face_class_conf）。
@@ -219,6 +217,20 @@ class FaceEngine:
                         print(f"[FaceEngine] [WARN] ONNX (cv2.dnn) fallback failed: {e_onnx} -> try torch.hub yolov5")
                         self.model = None
                         self._use_onnx_dnn = False
+
+                # --- 方案 ②：ONNX 失败后才懒加载 ultralytics/PyTorch ---
+                if (not self.loaded) and _load_optional_torch_backend():
+                    try:
+                        self.device = torch.device(device)
+                        self.model = UltralyticsYOLO(str(wp))
+                        self.names = getattr(self.model, 'names', {}) or {}
+                        self._use_ultralytics = True
+                        self.loaded = True
+                        print(f"[FaceEngine] [OK] YOLO loaded via optional ultralytics (device={device})")
+                    except Exception as e:
+                        print(f"[FaceEngine] [WARN] optional ultralytics load failed: {e}")
+                        self.model = None
+                        self._use_ultralytics = False
 
                 # --- 方案 ③：torch.hub.load 远端兜底（有网时） ---
                 if (not self.loaded) and _HUB_OK:
@@ -278,7 +290,7 @@ class FaceEngine:
     # 调用方（VideoWidget.update_frame L305）一行都不用改。
     # ============================================================
     def detect(self, frame):
-        if (not self.loaded) or (self.model is None) or (torch is None):
+        if (not self.loaded) or (self.model is None):
             return []
         try:
             if frame is None or getattr(frame, 'size', 0) == 0:

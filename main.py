@@ -44,45 +44,21 @@ for _stream_name in ('stdout', 'stderr'):
         pass
 
 
-# ================================================================
-# 【根治 c10.dll 1114 偶发 DLL 初始化失败】—— PyTorch 在 PyQt5/OpenCV 后初始化偶发 1114
-#   根因（经验 783954/811072 交叉验证）：PyQt5.Qt5Core / Qt5Gui / cv2 / numpy.core._multiarray_umath
-#   会在进程地址空间先占 64KB 对齐页，加载顺序竞争后导致 c10.dll 的 LdrpProcessWork 初始化回调里
-#   GetModuleHandleExW / TlsAlloc 竞争失败 → [WinError 1114] DLL 初始化例程失败。
-#   唯一稳定修复：所有第三方库都 import 前，先把 torch/torchvision/torchaudio/ultralytics 全 import 掉。
-#   失败最多重试 2 次（间隔 1s），3 次都失败才放过（face_engine 仍有 4 级降级兜底 + WARN 提示）。
-# ================================================================
-_TORCH_PRELOAD_OK = False
-try:
-    import time as _t_pc_t
-    for _attempt in (1, 2, 3):
-        try:
-            import torch
-            import torchvision
-            import torchaudio
-            import ultralytics
-            _TORCH_PRELOAD_OK = True
-            print(f"[MAIN] torch 预热成功（attempt={_attempt}）："
-                  f"torch={torch.__version__} / torchvision={torchvision.__version__} / "
-                  f"torchaudio={torchaudio.__version__} / ultralytics={ultralytics.__version__}")
-            break
-        except Exception as _attempt_err:
-            print(f"[MAIN] torch 预热 attempt={_attempt} 失败：{_attempt_err}")
-            if _attempt < 3:
-                try:
-                    # 清残留临时 torch 缓存
-                    for _k in list(sys.modules.keys()):
-                        if _k == 'torch' or _k.startswith('torch.') or _k == 'ultralytics' or _k.startswith('ultralytics.'):
-                            try: del sys.modules[_k]
-                            except Exception: pass
-                except Exception: pass
-                _t_pc_t.sleep(1.0)
-except Exception as _preload_total_err:
-    print(f"[MAIN] torch 预热段异常，继续启动（face_engine 自带 4 级降级兜底）：{_preload_total_err}")
+# 默认检测后端是 OpenCV DNN + ONNX，不在应用启动阶段加载 PyTorch。
+# 只有 ONNX 不可用时，FaceEngine 才会懒加载可选的 PyTorch/Ultralytics 后端。
 
 
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt
+
+# ================================================================
+# ✅ PyInstaller 路径中枢（最先导入，所有 core/ui 里的 R/U 都受其控制）
+#   - 源码模式：R()/U() 都指向 main.py 同级（项目根）
+#   - EXE 模式： R()→%TEMP%/_MEIxxxxx(权重+qm+wav+PNG只读)，U()→IPC-Monitor.exe同级(可写config/人脸库/日志)
+# ================================================================
+from core.app_paths import ensure_user_dirs, U
+
+USER_DATA_ROOT = ensure_user_dirs()
 
 # ================================================================
 # ✅ 全局异常 / 崩溃保护
@@ -91,7 +67,7 @@ from PyQt5.QtCore import Qt
 # 这里安装 sys.excepthook + Qt message handler，把所有异常写入日志文件，
 # 并尽量让程序不立即崩溃，方便定位问题。
 # ================================================================
-_CRASH_LOG_DIR = os.path.join("data", "logs")
+_CRASH_LOG_DIR = U("data/logs")
 
 
 def _write_crash_log(title, text):
@@ -146,9 +122,17 @@ if __name__ == "__main__":
     except Exception:
         pass
 
-    os.makedirs("data", exist_ok=True)
-    os.makedirs(_CRASH_LOG_DIR, exist_ok=True)
-    os.makedirs("data/backups", exist_ok=True)
+    # 早期 ensure_user_dirs 已经建好 data/logs/backups 等，这里只补一层兜底（防止 import 顺序变化）
+    try:
+        os.makedirs(U("data"), exist_ok=True)
+        os.makedirs(_CRASH_LOG_DIR, exist_ok=True)
+        os.makedirs(U("data/backups"), exist_ok=True)
+        os.makedirs(U("data/snapshots"), exist_ok=True)
+        os.makedirs(U("data/records"), exist_ok=True)
+        os.makedirs(U("data/motions"), exist_ok=True)
+        os.makedirs(U("data/faces"), exist_ok=True)
+    except Exception:
+        pass
 
     # 安装全局异常钩子：所有 Python 未捕获异常都会走这里（包括大部分 PyQt 信号槽中的异常）
     sys.excepthook = _global_excepthook

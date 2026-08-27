@@ -3,12 +3,17 @@ import shutil
 import json
 from datetime import datetime
 from .config_manager import ConfigManager  # ✅ 改为相对导入
+from core.app_paths import U
+
 
 class RecoveryManager:
-    def __init__(self, config_path="data/config.json", backup_path="data/backups/"):
-        self.config_path = config_path
-        self.backup_path = backup_path
-        os.makedirs(backup_path, exist_ok=True)
+    def __init__(self, config_path=None, backup_path=None):
+        self.config_path = config_path if config_path else U("data/config.json")
+        self.backup_path = backup_path if backup_path else U("data/backups/")
+        try:
+            os.makedirs(self.backup_path, exist_ok=True)
+        except Exception:
+            pass
 
     def backup(self):
         if os.path.exists(self.config_path):

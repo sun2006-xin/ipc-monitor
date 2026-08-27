@@ -2,6 +2,8 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 import json
+from core.app_paths import U
+
 
 class Logger:
     _instance = None
@@ -13,16 +15,22 @@ class Logger:
         return cls._instance
 
     def _init_logger(self):
-        os.makedirs("data/logs", exist_ok=True)
+        # PyInstaller EXE：日志必须写到 EXE 同级 data/logs（否则大概率写进 system32 直接闪退）
+        self._log_dir = U("data/logs")
+        self._log_file = U("data/logs/ipc.log")
         self.logger = logging.getLogger("IPC_Monitor")
         self.logger.setLevel(logging.INFO)
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        file_handler = RotatingFileHandler(
-            "data/logs/ipc.log", maxBytes=10*1024*1024, backupCount=5
-        )
-        file_handler.setFormatter(formatter)
-        self.logger.addHandler(file_handler)
-        # 控制台输出（可选）
+        try:
+            file_handler = RotatingFileHandler(
+                self._log_file, maxBytes=10*1024*1024, backupCount=5, encoding='utf-8'
+            )
+            file_handler.setFormatter(formatter)
+            self.logger.addHandler(file_handler)
+        except Exception as _le:
+            # 写日志失败也不能让进程崩（EXE 从只读目录双击时可能触发）
+            print(f"[Logger] WARN RotatingFileHandler 失败，跳过写盘: {_le}")
+        # 控制台输出（PyInstaller --windowed 下 stdout=None，StreamHandler 内部会安全处理）
         console = logging.StreamHandler()
         console.setFormatter(formatter)
         self.logger.addHandler(console)
@@ -42,9 +50,9 @@ class Logger:
     def export(self, filepath, format="txt"):
         import shutil
         if format == "txt":
-            shutil.copy2("data/logs/ipc.log", filepath)
+            shutil.copy2(self._log_file, filepath)
         elif format == "json":
-            with open("data/logs/ipc.log", 'r', encoding='utf-8') as f:
+            with open(self._log_file, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
             logs = []
             for line in lines:

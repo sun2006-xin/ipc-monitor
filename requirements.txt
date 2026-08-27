@@ -1,34 +1,11 @@
-# ======================================================
-# IPC-Monitor · 毕设 IP 摄像头 人脸监控 依赖版本锁
-#   作者测试环境：Windows 11 / Python 3.11.x / 官方 CPython 安装
-#   安装命令（pip 或 项目根运行）：
-#       python -m pip install --upgrade pip
-#       python -m pip install -r requirements.txt
-#   国内加速：pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
-# ======================================================
-# ----- Qt GUI -----
+# IPC-Monitor runtime and Windows packaging dependencies.
+# Supported environment: Windows 10/11 with Python 3.11.
+
 PyQt5>=5.15.9,<5.16
-
-# ----- 图像 / 视频 -----
 opencv-python>=4.10.0.84,<4.11
-numpy>=1.26,<2       # 🔴 numpy 2.x 不兼容 torch 2.13 / ultralytics 8.4，必须 <2
+numpy>=1.26,<2
 Pillow>=10.4.0
-
-# ----- 人脸识别（必装，否则 A 档识别完全不可用）-----
-# 👉 dlib 必须 19.24.1+，pip 装失败怎么办？README 第 4 节给了「dlib 三种装法」
 dlib>=19.24.1
 
-# ----- 深度学习（人脸检测 YOLOv5 ONNX 兜底不依赖下面4个，装不上也可以退化成 OpenCV DNN 模式）-----
-# 🔴 torch / torchvision / torchaudio 必须从官方 CPU whl 源下载，不然 pip 直接装 2.2GB CUDA 版。
-#   README 给了 4 行命令一键安装：
-#      pip install torch==2.13.0+cpu torchvision==0.28.0+cpu torchaudio==2.11.0+cpu `
-#        --index-url https://download.pytorch.org/whl/cpu `
-#        --extra-index-url https://pypi.org/simple
-#   下面这三行不写死版本，让 README 的命令接管，避免 pip 找不到 +cpu 包导致报错。
-torch>=2.13.0
-torchvision>=0.28.0
-torchaudio>=2.11.0
-ultralytics>=8.4.93,<8.5
-
-# ----- 可选打包 EXE -----
+# Used only to build the Windows executable.
 pyinstaller>=6.10.0 ; sys_platform == "win32"

@@ -1,0 +1,5 @@
+# 可选：PyTorch / Ultralytics 实验后端（默认运行与 EXE 均不需要）
+# Windows CPU 版本建议按 PyTorch 官网给出的 index-url 安装，避免误装大型 CUDA 包。
+torch>=2.13.0
+torchvision>=0.28.0
+ultralytics>=8.4.93,<8.5

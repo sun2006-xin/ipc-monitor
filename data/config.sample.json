@@ -1,30 +1,10 @@
 {
   "_comment_": "开源示例配置 — 复制为 data/config.json 后改成自己的摄像头账号密码（data/config.json 已在 .gitignore 忽略，不会被提交）",
-  "devices": [
-    {
-      "id": "REPLACE_WITH_UUID_OR_RANDOM",
-      "name": "示例-客厅摄像头",
-      "username": "admin",
-      "ip": "192.168.1.100",
-      "port": 554,
-      "password": "your_password_here",
-      "stream": "stream1",
-      "online": false,
-      "enabled": true
-    },
-    {
-      "id": "REPLACE_ANOTHER_DEVICE",
-      "name": "示例-门口摄像头",
-      "username": "admin",
-      "ip": "192.168.1.101",
-      "port": 554,
-      "password": "your_password_here",
-      "stream": "ch01_0",
-      "online": false,
-      "enabled": false
-    }
-  ],
-  "layout": { "rows": 2, "cols": 2 },
+  "devices": [],
+  "layout": {
+    "rows": 2,
+    "cols": 2
+  },
   "detection": {
     "face_interval": 5,
     "motion_interval": 5,
@@ -39,6 +19,11 @@
     "status_bar_style": "red"
   },
   "language": "zh",
-  "recording": { "save_path": "data/records" },
-  "logs": { "max_size_mb": 50, "max_backup": 5 }
+  "recording": {
+    "save_path": "data/records"
+  },
+  "logs": {
+    "max_size_mb": 50,
+    "max_backup": 5
+  }
 }

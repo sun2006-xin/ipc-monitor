@@ -61,19 +61,19 @@ class FaceManagerDialog(QDialog):
         self.btn_add.setToolTip("从当前画面截一张人脸注册（快、但容易受角度/光照影响误判）")
         self.btn_add.clicked.connect(self.add_from_video)
         # ================================================================
-        # B1：多帧平均注册（推荐 10 帧）— 毕设加分档，演示"更稳的人脸注册"
+        # B1：多帧平均注册（推荐 10 帧）— 提高不同角度和光照下的稳定性
         #   流程：询问姓名 → QProgressDialog 显示 "采集 x/10 帧" → QTimer 每 250ms 取帧 + YOLO detect 拿 bbox →
         #         采满 10 帧（或超时 4s）→ register_face_multi → QMessageBox 显示"已注册张三 (8/10 帧平均)"
         # ================================================================
         self.btn_add_multi = QPushButton("➕ 多帧注册（推荐 10 帧）")
-        self.btn_add_multi.setToolTip("10 帧特征取均值再注册，角度/光照抖动下比单帧稳 3~5 倍（毕设答辩重点演示项）")
+        self.btn_add_multi.setToolTip("10 帧特征取均值再注册，角度/光照抖动下比单帧稳 3~5 倍")
         self.btn_add_multi.clicked.connect(self.add_multi_from_video)
         self.btn_delete = QPushButton("删除选中")
         self.btn_delete.clicked.connect(self.delete_selected)
         self.btn_refresh = QPushButton("刷新")
         self.btn_refresh.clicked.connect(self.refresh_table)
         # ================================================================
-        # B3 · 人脸出现记录检索（毕设加分项：按姓名搜"这个人今天在哪几个通道出现过几次"）
+        # B3 · 人脸出现记录检索（按姓名检索历史出现记录）
         #   数据源 1：data/faces 目录所有快照（文件名如"张三_通道名_时间.jpg"、"陌生人_通道名_时间.jpg"）
         #   数据源 2：事件历史主窗口 dialog 的 event list（已被 A5 记录所有 stranger/face 事件）
         #   UI：左 QListWidget 双击缩略图 → 右 QLabel 显示大图 + 路径（QSplitter 拉缩方便）
@@ -267,7 +267,7 @@ class FaceManagerDialog(QDialog):
             self.refresh_table()
 
     # ================================================================
-    # B1 · 多帧平均人脸注册（推荐 10 帧）- 毕设加分档，降低单帧误判率
+    # B1 · 多帧平均人脸注册（推荐 10 帧）- 降低单帧误判率
     #   时序：add_multi_from_video → 先问姓名 → 启动 _multi_timer 每 250ms tick
     #         → tick 里取 current_frame + face_engine.detect 拿 bbox → 入 list
     #         → 采满 10 帧 或 达到 tick 上限（10 × 2.5 = 25 ticks ≈ 6s）→ _multi_finish
