@@ -13,6 +13,11 @@ class _FakeMotionEngine:
         return [(3, 4, 5, 6)]
 
 
+class _FakeRecognizer:
+    def recognize_from_frame(self, frame, bbox):
+        return "Alice", False, 0.12, [0.1, 0.2]
+
+
 class AnalysisThreadTests(unittest.TestCase):
     def test_process_frame_returns_requested_analysis(self):
         result = AnalysisThread.process_frame(
@@ -20,12 +25,14 @@ class AnalysisThreadTests(unittest.TestCase):
             frame_id=7,
             face_engine=_FakeFaceEngine(),
             motion_engine=_FakeMotionEngine(),
+            face_recognizer=_FakeRecognizer(),
             run_face=True,
             run_motion=True,
         )
         self.assertEqual(result["frame_id"], 7)
         self.assertEqual(result["face_detections"][0]["bbox"], [1, 2, 10, 12])
         self.assertEqual(result["motion_rects"], [(3, 4, 5, 6)])
+        self.assertEqual(result["recognition_results"][0]["name"], "Alice")
         self.assertGreaterEqual(result["elapsed_ms"], 0.0)
 
     def test_disabled_analysis_does_not_call_engines(self):
@@ -38,6 +45,7 @@ class AnalysisThreadTests(unittest.TestCase):
             frame_id=8,
             face_engine=ExplodingEngine(),
             motion_engine=ExplodingEngine(),
+            face_recognizer=None,
             run_face=False,
             run_motion=False,
         )

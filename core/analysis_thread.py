@@ -9,10 +9,11 @@ from PyQt5.QtCore import QThread, pyqtSignal
 class AnalysisThread(QThread):
     result_ready = pyqtSignal(object)
 
-    def __init__(self, face_engine=None, motion_engine=None, parent=None):
+    def __init__(self, face_engine=None, motion_engine=None, face_recognizer=None, parent=None):
         super().__init__(parent)
         self.face_engine = face_engine
         self.motion_engine = motion_engine
+        self.face_recognizer = face_recognizer
         self._condition = threading.Condition()
         self._latest_request = None
         self._stop_requested = False
@@ -20,12 +21,13 @@ class AnalysisThread(QThread):
 
     @staticmethod
     def process_frame(frame, frame_id, face_engine=None, motion_engine=None,
-                      run_face=True, run_motion=True):
+                      run_face=True, run_motion=True, face_recognizer=None):
         started = time.perf_counter()
         result = {
             "frame": frame,
             "frame_id": frame_id,
             "face_detections": [],
+            "recognition_results": [],
             "motion_rects": [],
             "face_ran": bool(run_face and face_engine is not None),
             "motion_ran": bool(run_motion and motion_engine is not None),
@@ -36,6 +38,22 @@ class AnalysisThread(QThread):
                 result["face_detections"] = face_engine.detect(frame) or []
             except Exception as exc:
                 result["errors"].append(f"face: {exc}")
+        if result["face_detections"] and face_recognizer is not None:
+            for detection in result["face_detections"]:
+                bbox = detection.get("bbox") if isinstance(detection, dict) else None
+                if not bbox:
+                    continue
+                try:
+                    name, is_stranger, distance, _encoding = face_recognizer.recognize_from_frame(frame, bbox)
+                    if name is not None:
+                        result["recognition_results"].append({
+                            "bbox": list(bbox),
+                            "name": name,
+                            "is_stranger": bool(is_stranger),
+                            "distance": float(distance) if distance is not None and distance >= 0 else 0.0,
+                        })
+                except Exception as exc:
+                    result["errors"].append(f"recognition: {exc}")
         if run_motion and motion_engine is not None:
             try:
                 result["motion_rects"] = motion_engine.detect(frame) or []
@@ -71,7 +89,7 @@ class AnalysisThread(QThread):
             frame, frame_id, run_face, run_motion = request
             result = self.process_frame(
                 frame, frame_id, self.face_engine, self.motion_engine,
-                run_face, run_motion,
+                run_face, run_motion, self.face_recognizer,
             )
             self.result_ready.emit(result)
 

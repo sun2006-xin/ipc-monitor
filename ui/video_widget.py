@@ -250,13 +250,25 @@ class VideoWidget(QWidget):
             self.analysis_thread = AnalysisThread(
                 face_engine=self.face_engine,
                 motion_engine=self.motion_engine,
+                face_recognizer=self.face_recognizer,
                 parent=self,
             )
             self.analysis_thread.result_ready.connect(self._on_analysis_result)
             self.analysis_thread.start()
         except Exception as e:
             print(f"❌ [VideoWidget] 创建采集线程异常: {e}")
-            self.capture_thread = None
+            if self.analysis_thread is not None:
+                try:
+                    self.analysis_thread.stop()
+                except Exception:
+                    pass
+                self.analysis_thread = None
+            if self.capture_thread is not None:
+                try:
+                    self.capture_thread.stop()
+                except Exception:
+                    pass
+                self.capture_thread = None
             self.set_connected(False)
             return
 
@@ -379,28 +391,8 @@ class VideoWidget(QWidget):
             print(f"[VideoWidget] 后台分析异常: {'; '.join(errors)}")
         if result.get("face_ran"):
             self.last_face_detections = result["face_detections"]
-            rec_results = []
-            any_stranger = False
-            if self.face_recognizer is not None:
-                for det in self.last_face_detections:
-                    bbox = det.get('bbox')
-                    if not bbox:
-                        continue
-                    try:
-                        name, is_stranger, distance, _enc = self.face_recognizer.recognize_from_frame(frame, bbox)
-                    except Exception as exc:
-                        print(f"[VideoWidget] recognize_from_frame 异常: {exc}")
-                        name, is_stranger, distance = None, False, -1.0
-                    if name is None:
-                        continue
-                    rec_results.append({
-                        'bbox': list(bbox),
-                        'name': name,
-                        'is_stranger': bool(is_stranger),
-                        'distance': float(distance) if distance and distance >= 0 else 0.0,
-                    })
-                    any_stranger = any_stranger or bool(is_stranger)
-            self._last_face_rec_results = rec_results
+            self._last_face_rec_results = result.get("recognition_results") or []
+            any_stranger = any(item.get("is_stranger") for item in self._last_face_rec_results)
             if frame is not None:
                 self._trigger_event("face", frame)
                 if any_stranger:
