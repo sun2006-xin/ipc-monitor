@@ -75,6 +75,7 @@ ipc-monitor/
 │  ├─ face_engine.py             ONNX 人脸检测
 │  ├─ face_recognizer.py         dlib 人脸特征与识别
 │  ├─ motion_engine.py            运动检测
+│  ├─ reconnect_policy.py         非阻塞重连退避策略
 │  └─ video_manager.py            旧版线程封装（当前视频通道使用自身定时器）
 ├─ ui/
 │  ├─ video_widget.py             单路采集、检测、录像与事件显示
@@ -118,6 +119,11 @@ python -m compileall -q core ui main.py tests
 - 确认主机地址、端口、账号、密码和流路径正确。
 - 确认电脑可以访问摄像头所在网络。
 - 查看 `data/logs/` 中的日志，但不要公开包含设备信息的日志文件。
+- 程序会按 0.5、1、2、4 秒逐步退避重连，恢复连接后自动清零；这段时间界面保持响应。
+
+### 配置文件损坏
+
+程序会优先从 `data/backups/` 恢复最近备份；没有可用备份时，会在同一数据目录生成隐私安全的默认配置。配置写入采用临时文件替换，避免断电留下半个 JSON 文件。
 
 ### EXE 启动后没有设备
 

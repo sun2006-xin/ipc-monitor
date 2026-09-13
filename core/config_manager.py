@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import tempfile
 from datetime import datetime
 import uuid
 from core.app_paths import R, U
@@ -13,8 +14,9 @@ class ConfigManager:
         self.backup_path = backup_path if backup_path else U("data/backups/")
         try:
             os.makedirs(self.backup_path, exist_ok=True)
-        except Exception:
+        except OSError:
             pass
+        self.load_error = None
         self.config = self.load()
 
     def load(self):
@@ -22,16 +24,27 @@ class ConfigManager:
             try:
                 with open(self.config_path, 'r', encoding='utf-8') as f:
                     return json.load(f)
-            except:
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError) as exc:
+                self.load_error = exc
                 return self.default_config()
         return self.default_config()
 
     def save(self):
+        os.makedirs(os.path.dirname(os.path.abspath(self.config_path)), exist_ok=True)
         if os.path.exists(self.config_path):
-            backup_name = f"config_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            backup_name = f"config_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.json"
             shutil.copy2(self.config_path, os.path.join(self.backup_path, backup_name))
-        with open(self.config_path, 'w', encoding='utf-8') as f:
-            json.dump(self.config, f, indent=2, ensure_ascii=False)
+        parent = os.path.dirname(os.path.abspath(self.config_path))
+        fd, temp_path = tempfile.mkstemp(prefix=".config-", suffix=".tmp", dir=parent)
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, indent=2, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, self.config_path)
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
 
     def default_config(self):
         """Return a privacy-safe configuration with no preset camera."""

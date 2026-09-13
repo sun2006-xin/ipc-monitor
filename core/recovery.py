@@ -34,14 +34,14 @@ class RecoveryManager:
 
     def auto_repair(self, validator_func):
         try:
-            with open(self.config_path, 'r') as f:
+            with open(self.config_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             if validator_func(data):
                 return True
-        except:
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
             pass
         if self.restore_latest():
             return True
-        cfg = ConfigManager()
+        cfg = ConfigManager(config_path=self.config_path, backup_path=self.backup_path)
         cfg.save()
         return True
