@@ -6,7 +6,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from core.performance_benchmark import run_synthetic_benchmark, run_video_benchmark
+from core.performance_benchmark import (
+    run_queue_pressure_benchmark,
+    run_synthetic_benchmark,
+    run_video_benchmark,
+)
 
 
 def main():
@@ -14,7 +18,12 @@ def main():
     parser.add_argument("--frames", type=int, default=30)
     parser.add_argument("--video", type=Path)
     parser.add_argument("--real", action="store_true", help="run the fixed-video pipeline")
+    parser.add_argument("--queue-pressure", action="store_true")
+    parser.add_argument("--delay-ms", type=float, default=10)
     args = parser.parse_args()
+    if args.queue_pressure:
+        print(json.dumps(run_queue_pressure_benchmark(args.frames, args.delay_ms), ensure_ascii=False, indent=2))
+        return
     if args.real:
         if args.video is None:
             parser.error("--real requires --video PATH")

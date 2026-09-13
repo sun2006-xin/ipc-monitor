@@ -5,10 +5,12 @@ analysis pipeline shape and result bookkeeping, not real camera/model speed.
 """
 
 import time
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import cv2
+from PyQt5.QtCore import Qt
 
 from core.analysis_thread import AnalysisThread
 from core.performance_metrics import FrameMetrics
@@ -167,4 +169,45 @@ def run_video_benchmark(video_path, camera_count=1, max_frames=30,
         "p95_frame_ms": snapshot["p95_frame_ms"],
         "fps": (processed / elapsed_s) if elapsed_s > 0 else 0.0,
         "synthetic": False,
+    }
+
+
+class _SlowSyntheticFaceEngine:
+    def __init__(self, delay_ms):
+        self.delay_s = max(0.0, float(delay_ms)) / 1000.0
+
+    def detect(self, frame):
+        time.sleep(self.delay_s)
+        return [{"bbox": [1, 2, 10, 12], "confidence": 0.9}]
+
+
+def run_queue_pressure_benchmark(frame_count=30, delay_ms=10):
+    """Prove that a stalled analysis worker keeps only the newest request."""
+    frame_count = int(frame_count)
+    if frame_count < 2 or float(delay_ms) < 0:
+        raise ValueError("frame_count must be at least 2 and delay_ms non-negative")
+    thread = AnalysisThread(
+        face_engine=_SlowSyntheticFaceEngine(delay_ms), motion_engine=None
+    )
+    results = []
+    finished = threading.Event()
+
+    def on_result(result):
+        results.append(result)
+        finished.set()
+
+    thread.result_ready.connect(on_result, Qt.DirectConnection)
+    # Fill the bounded latest-request slot before starting the deliberately
+    # slow worker. This makes the expected drop count deterministic.
+    for frame_id in range(frame_count):
+        thread.submit({"frame_id": frame_id}, frame_id, run_face=True, run_motion=False)
+    thread.start()
+    finished.wait(timeout=max(2.0, float(delay_ms) / 1000.0 * 4.0))
+    thread.stop()
+    return {
+        "submitted_frames": frame_count,
+        "processed_frames": len(results),
+        "queue_dropped": thread.dropped_requests,
+        "result_frame_ids": [result["frame_id"] for result in results],
+        "delay_ms": float(delay_ms),
     }
