@@ -1,6 +1,8 @@
 import sys
 import os
 import importlib
+import threading
+from contextlib import nullcontext
 import cv2
 import numpy as np
 from pathlib import Path
@@ -124,6 +126,7 @@ class FaceEngine:
         self.stride = 32
         self.loaded = False
         self.model = None            # 加载后：Ultralytics YOLO / cv2.dnn_Net / DetectMultiBackend / hub
+        self._onnx_lock = threading.RLock()
         self._use_ultralytics = False  # True → 推理分支走 ultralytics.predict
         self._use_onnx_dnn = False     # v5 NEW 方案 ②：cv2.dnn.readNetFromONNX(best.onnx) → 纯 CPU，YOLOv5 权重 100% 可跑
         self._onnx_input_name = ""
@@ -366,8 +369,11 @@ class FaceEngine:
                     blob = cv2.dnn.blobFromImage(letterboxed, 1.0 / 255.0,
                                                  (self.img_size, self.img_size),
                                                  (0, 0, 0), swapRB=False, crop=False)
-                    net.setInput(blob)
-                    outs = net.forward([self._onnx_output_name] if self._onnx_output_name else None)
+                    # OpenCV DNN Net 持有可变的输入/中间缓冲；多个摄像头
+                    # 共享同一 FaceEngine 时必须串行化 setInput + forward。
+                    with getattr(self, "_onnx_lock", nullcontext()):
+                        net.setInput(blob)
+                        outs = net.forward([self._onnx_output_name] if self._onnx_output_name else None)
                     if not outs:
                         return []
                     pred = outs[0]   # shape = (1, 25200, 6)  YOLOv5 ONNX 标准输出
@@ -376,6 +382,10 @@ class FaceEngine:
                     if pred.shape[0] == 0 or pred.shape[1] < 6:
                         return []
                     # 取前 4=xywh(相对于 640 letterboxed 图,中心+宽高),第4=obj_conf,第5=class0(face) conf
+                    finite = np.isfinite(pred[:, :6]).all(axis=1)
+                    if not finite.any():
+                        return []
+                    pred = pred[finite]
                     xywh = pred[:, :4].astype(np.float32, copy=False)
                     obj_conf = pred[:, 4].astype(np.float32, copy=False)
                     cls_conf = pred[:, 5].astype(np.float32, copy=False)

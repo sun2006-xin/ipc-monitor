@@ -20,6 +20,7 @@ IPC-Monitor 是一个面向 Windows 的多路 RTSP 摄像头监控与本地人�
 - 采集线程与 UI 定时器分离，使用最新帧缓冲，降低 RTSP 读取和推理对界面响应的影响。
 - 人脸检测、运动检测和 dlib 人脸识别在后台分析线程执行，结果通过 Qt 信号回到界面；告警、截图、画框和录像仍由 UI 线程统一处理。
 - 可运行 `python tools/run_performance_benchmark.py --frames 30` 生成 1/4/9 路合成基线；报告包含 P95、FPS、队列丢弃和结果帧号，仅用于验证线程边界与指标链路，不代替真实摄像头压测。
+- 多路共享 OpenCV DNN 时，检测器的 `setInput/forward` 已串行保护，并过滤 NaN/Infinity 输出，避免并发下坐标异常导致崩溃；真实吞吐仍需按设备复测。
 
 ## 直接运行 EXE
 
