@@ -28,6 +28,7 @@ IPC-Monitor 是一个面向 Windows 的多路 RTSP 摄像头监控与本地人�
 - 多路共享 OpenCV DNN 时，检测器的 `setInput/forward` 已串行保护，并过滤 NaN/Infinity 输出，避免并发下坐标异常导致崩溃；真实吞吐仍需按设备复测。
 - 可运行 `python tools/run_performance_benchmark.py --queue-pressure --frames 12 --delay-ms 5` 验证最新请求优先：12 次提交只处理最后帧，丢弃数为 11。
 - 固定视频真实模型基准支持 `--camera-counts 1 --workers 1` 分批运行，适合内存有限的 Windows 环境。
+- 当前低内存烟测（每路 3 帧、单 worker）结果：1 路 P95 168.26 ms / 6.95 FPS，4 路 P95 139.75 ms / 7.31 FPS，9 路 P95 134.75 ms / 7.61 FPS；三组均无丢帧。该数据只代表本机固定视频样本，不代表所有摄像头设备。
 - GitHub Actions 会在 `main` 和 Pull Request 上自动执行测试、源码编译和空白检查。
 - 主界面底部诊断栏每秒汇总实际占用通道的分析丢弃数、最近分析帧和最近告警帧，便于排查“告警截图是否落后”。
 

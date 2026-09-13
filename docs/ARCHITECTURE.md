@@ -37,6 +37,8 @@ PyQt 主窗口
 
 固定视频实测曾暴露共享 `cv2.dnn_Net` 并发时的 NaN/Infinity 输出；现在 `FaceEngine` 串行保护 ONNX 的 `setInput/forward`，并在坐标变换前过滤非有限预测。修复后同一 640×480 本地样本、每路 5 帧的 P95 约为 1 路 164 ms、4 路 643 ms、9 路 1467 ms，说明稳定性恢复但共享 CPU 检测器成为瓶颈。该基准直接调用分析函数，`queue_dropped=0` 只表示本次没有模拟提交队列压力。
 
+在内存恢复后，使用真实 ONNX/dlib 固定视频、每路 3 帧、单 worker 的低内存烟测为：1 路 P95 168.26 ms / 6.95 FPS，4 路 P95 139.75 ms / 7.31 FPS，9 路 P95 134.75 ms / 7.61 FPS；三组均完整处理且 `queue_dropped=0`。这是可重复的本机样本基线，不是跨设备性能承诺。
+
 队列压力可用 `python tools/run_performance_benchmark.py --queue-pressure --frames 12 --delay-ms 5` 单独验证：12 次快速提交只处理最后的帧 11，丢弃 11 次。这证明“最新请求优先”是有界策略，但不代表实时画面完全不丢帧。
 
 主窗口底部诊断栏每秒读取实际占用通道的 `get_performance_snapshot()`，显示分析丢弃总数、最近分析帧和最近告警帧。它是只读观测层，不参与告警决策；空的网格槽位不会计入在线通道。
