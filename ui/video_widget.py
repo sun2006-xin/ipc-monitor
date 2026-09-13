@@ -134,6 +134,9 @@ class VideoWidget(QWidget):
         # -------- A2：FPS 滑窗计算器（maxlen=10 算 10 帧平均，不抖动）--------
         self._fps_times = deque(maxlen=10)
         self.performance_metrics = FrameMetrics()
+        self._last_analysis_frame_id = None
+        self._last_analysis_errors = []
+        self._last_event_frame_id = None
 
         # 缓存检测结果
         self.last_face_detections = []
@@ -330,6 +333,9 @@ class VideoWidget(QWidget):
         self.last_face_detections = []
         self.last_motion_rects = []
         self._last_face_rec_results = []
+        self._last_analysis_frame_id = None
+        self._last_analysis_errors = []
+        self._last_event_frame_id = None
         self._last_stranger_time = 0
         self._crowd_face_streak = 0
         self._crowd_cooldown = 0
@@ -363,6 +369,9 @@ class VideoWidget(QWidget):
             int(self.analysis_thread.dropped_requests)
             if self.analysis_thread is not None else 0
         )
+        snapshot["last_analysis_frame_id"] = getattr(self, "_last_analysis_frame_id", None)
+        snapshot["last_event_frame_id"] = getattr(self, "_last_event_frame_id", None)
+        snapshot["last_analysis_errors"] = list(getattr(self, "_last_analysis_errors", []))
         return snapshot
 
     def _submit_analysis(self, frame):
@@ -392,6 +401,8 @@ class VideoWidget(QWidget):
             return
         frame = result.get("frame")
         errors = result.get("errors") or []
+        self._last_analysis_frame_id = result.get("frame_id")
+        self._last_analysis_errors = list(errors)
         if errors:
             print(f"[VideoWidget] 后台分析异常: {'; '.join(errors)}")
         if result.get("face_ran"):
@@ -399,7 +410,7 @@ class VideoWidget(QWidget):
             self._last_face_rec_results = result.get("recognition_results") or []
             any_stranger = any(item.get("is_stranger") for item in self._last_face_rec_results)
             if frame is not None:
-                self._trigger_event("face", frame)
+                self._trigger_event("face", frame, result.get("frame_id"))
                 if any_stranger:
                     now_s = time.time()
                     if now_s - self._last_stranger_time >= self._stranger_cooldown:
@@ -411,6 +422,7 @@ class VideoWidget(QWidget):
                             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
                             fname = os.path.join(self.data_root, subdir, f"陌生人_{name_cn}_{ts}.jpg")
                             if cv2.imwrite(fname, frame):
+                                self._last_event_frame_id = result.get("frame_id")
                                 self.event_triggered.emit("stranger", name_cn, fname)
                         except Exception as exc:
                             print(f"[VideoWidget] 陌生人告警存图/emit异常: {exc}")
@@ -422,7 +434,7 @@ class VideoWidget(QWidget):
                 if self._absence_already_fired:
                     self._absence_already_fired = False
                 if self.motion_alarm and frame is not None:
-                    self._trigger_event("motion", frame)
+                    self._trigger_event("motion", frame, result.get("frame_id"))
 
     def _save_frame(self, frame, subdir):
         try:
@@ -967,7 +979,7 @@ class VideoWidget(QWidget):
         except Exception as e:
             print(f"[VideoWidget] update_frame 捕获异常: {e}")
 
-    def _trigger_event(self, event_type, frame):
+    def _trigger_event(self, event_type, frame, frame_id=None):
         # ✅ 销毁保护 + 识别器为 None 时仍能保存
         if getattr(self, '_destroying', False):
             return
@@ -978,6 +990,7 @@ class VideoWidget(QWidget):
         filepath = self._save_frame(frame, event_type + "s")
         if filepath is None:
             return  # 保存失败就不发事件，避免下游处理空路径
+        self._last_event_frame_id = frame_id if frame_id is not None else self.frame_counter
         try:
             self.event_triggered.emit(event_type, self.name_label.text(), filepath)
         except Exception as e:

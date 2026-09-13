@@ -1,5 +1,7 @@
 import unittest
 
+import numpy as np
+
 from core.performance_metrics import FrameMetrics
 from ui.video_widget import VideoWidget
 
@@ -32,10 +34,39 @@ class FrameMetricsTests(unittest.TestCase):
         widget = VideoWidget.__new__(VideoWidget)
         widget.performance_metrics = FrameMetrics()
         widget.analysis_thread = type("Thread", (), {"dropped_requests": 3})()
+        widget._last_analysis_frame_id = None
+        widget._last_event_frame_id = None
+        widget._last_analysis_errors = []
 
         snapshot = widget.get_performance_snapshot()
 
         self.assertEqual(snapshot["analysis_dropped_requests"], 3)
+
+    def test_analysis_result_keeps_frame_id_for_event_correlation(self):
+        widget = VideoWidget.__new__(VideoWidget)
+        widget._destroying = False
+        widget.last_face_detections = []
+        widget._last_face_rec_results = []
+        widget.last_motion_rects = []
+        widget._triggered = []
+        widget._trigger_event = lambda *args: widget._triggered.append(args)
+        widget.event_triggered = type("Signal", (), {"emit": lambda *_args: None})()
+        widget._last_stranger_time = 0
+        widget._stranger_cooldown = 8
+        widget.motion_alarm = False
+
+        widget._on_analysis_result({
+            "frame": np.zeros((2, 2, 3), dtype=np.uint8),
+            "frame_id": 42,
+            "face_ran": True,
+            "face_detections": [{"bbox": [0, 0, 1, 1]}],
+            "recognition_results": [],
+            "motion_ran": False,
+            "errors": [],
+        })
+
+        self.assertEqual(widget._last_analysis_frame_id, 42)
+        self.assertEqual(widget._triggered[0][2], 42)
 
 
 if __name__ == "__main__":
