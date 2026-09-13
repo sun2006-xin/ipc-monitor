@@ -6,6 +6,7 @@ opencv-python>=4.10.0.84,<4.11
 numpy>=1.26,<2
 Pillow>=10.4.0
 dlib>=19.24.1
+psutil>=6.0.0,<7
 
 # Used only to build the Windows executable.
 pyinstaller>=6.10.0 ; sys_platform == "win32"
