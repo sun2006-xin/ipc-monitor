@@ -1,6 +1,6 @@
 import unittest
 
-from core.performance_benchmark import run_synthetic_benchmark
+from core.performance_benchmark import run_synthetic_benchmark, run_video_benchmark
 
 
 class PerformanceBenchmarkTests(unittest.TestCase):
@@ -22,6 +22,10 @@ class PerformanceBenchmarkTests(unittest.TestCase):
             run_synthetic_benchmark(camera_count=0, frames_per_camera=4)
         with self.assertRaises(ValueError):
             run_synthetic_benchmark(camera_count=1, frames_per_camera=0)
+
+    def test_video_benchmark_rejects_missing_local_input(self):
+        with self.assertRaises(ValueError):
+            run_video_benchmark("does-not-exist.mp4", camera_count=1, max_frames=4)
 
 
 if __name__ == "__main__":

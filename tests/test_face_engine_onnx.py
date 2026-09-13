@@ -16,6 +16,15 @@ class _FakeOnnxNet:
         return [prediction]
 
 
+class _NonFiniteOnnxNet(_FakeOnnxNet):
+    def forward(self, names):
+        prediction = np.array([[
+            [320, 320, 200, 200, 0.9, 0.9],
+            [np.nan, np.inf, 200, 200, 0.9, 0.9],
+        ]], dtype=np.float32)
+        return [prediction]
+
+
 class FaceEngineOnnxTests(unittest.TestCase):
     def test_onnx_detection_does_not_require_torch(self):
         engine = FaceEngine.__new__(FaceEngine)
@@ -38,6 +47,23 @@ class FaceEngineOnnxTests(unittest.TestCase):
 
         self.assertEqual(len(detections), 1)
         self.assertGreater(detections[0]["confidence"], 0.8)
+
+    def test_onnx_detection_discards_non_finite_predictions(self):
+        engine = FaceEngine.__new__(FaceEngine)
+        engine.loaded = True
+        engine.model = _NonFiniteOnnxNet()
+        engine._use_ultralytics = False
+        engine._use_onnx_dnn = True
+        engine._use_hub = False
+        engine._onnx_output_name = "output0"
+        engine.conf_thres = 0.25
+        engine.img_size = 640
+        engine.stride = 32
+
+        detections = engine.detect(np.zeros((640, 640, 3), dtype=np.uint8))
+
+        self.assertEqual(len(detections), 1)
+        self.assertEqual(detections[0]["bbox"], [220, 220, 420, 420])
 
 
 if __name__ == "__main__":
