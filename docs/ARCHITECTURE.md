@@ -47,6 +47,8 @@ PyQt 主窗口
 
 定时录像的小时轮转已抽成 `_ensure_scheduled_recording(frame, now)`：小时键变化时先停止旧 writer，再创建新 writer，测试可注入时间而不依赖真实时钟。
 
+采集线程的 soak 边界也已覆盖：正常停止和读帧失败都会释放 `VideoCapture`，重复启动/停止不会累积旧句柄；这些测试使用 fake capture，不需要真实摄像头。
+
 ## 下一阶段迭代入口
 
 1. 为断流重连、录像文件轮转和事件冷却增加可重复测试。
