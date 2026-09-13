@@ -7,15 +7,19 @@ from ui.video_widget import VideoWidget
 
 
 class _FakeWriter:
-    def __init__(self, opened=True):
+    def __init__(self, opened=True, events=None, label="writer"):
         self.opened = opened
         self.release_count = 0
+        self.events = events
+        self.label = label
 
     def isOpened(self):
         return self.opened
 
     def release(self):
         self.release_count += 1
+        if self.events is not None:
+            self.events.append(f"release:{self.label}")
 
 
 class VideoRecordingLifecycleTests(unittest.TestCase):
@@ -57,6 +61,32 @@ class VideoRecordingLifecycleTests(unittest.TestCase):
         self.assertFalse(widget.is_recording)
         self.assertIsNone(widget.video_writer)
         self.assertEqual(writer.release_count, 1)
+
+    def test_hour_rotation_releases_old_writer_before_creating_new(self):
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        widget = self._widget(frame)
+        widget._schedule_record_enabled = True
+        widget._record_hour_key = ""
+        widget.cap = None
+        events = []
+        writers = iter(
+            [
+                _FakeWriter(events=events, label="old"),
+                _FakeWriter(events=events, label="new"),
+            ]
+        )
+
+        def make_writer(*_args):
+            events.append("create")
+            return next(writers)
+
+        with patch("ui.video_widget.cv2.VideoWriter", side_effect=make_writer):
+            widget._ensure_scheduled_recording(frame, now=__import__("datetime").datetime(2026, 9, 13, 10, 59))
+            widget._ensure_scheduled_recording(frame, now=__import__("datetime").datetime(2026, 9, 13, 11, 0))
+
+        self.assertEqual(events, ["create", "release:old", "create"])
+        self.assertTrue(widget.is_recording)
+        self.assertEqual(widget._record_hour_key, "20260913_11")
 
 
 if __name__ == "__main__":
