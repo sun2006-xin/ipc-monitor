@@ -58,3 +58,16 @@ def summarize_soak_csv(path):
         "avg_cpu_percent": round(sum(cpu) / len(cpu), 2),
     }
 
+
+def assess_soak_summary(summary, rss_growth_warn_mb=50.0, thread_growth_warn=2):
+    """Add conservative review flags; never claim a leak from thresholds alone."""
+    warnings = []
+    if summary["rss_delta_mb"] >= float(rss_growth_warn_mb):
+        warnings.append("RSS 增量达到复查阈值")
+    if summary["thread_delta"] >= int(thread_growth_warn):
+        warnings.append("线程数增加达到复查阈值")
+    return {
+        "status": "REVIEW" if warnings else "PASS",
+        "warnings": warnings,
+    }
+
