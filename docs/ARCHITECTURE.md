@@ -13,6 +13,7 @@ PyQt 主窗口
           ├─ motion_engine：MOG2 运动区域检测
           ├─ event_logger：记录事件并发出 UI 信号
           └─ snapshots/records：写入用户数据目录
+          └─ performance_metrics：记录处理耗时、P95、丢帧与窗口 FPS
 ```
 
 ## 路径与隐私边界
@@ -26,6 +27,8 @@ PyQt 主窗口
 当前 `VideoWidget` 使用 Qt 定时器驱动采集，便于保持现有 UI 行为和录像/事件逻辑一致。`core/video_manager.py` 中的 `VideoThread` 是早期线程封装，当前没有被主窗口使用；后续如需提升多路性能，应先用基准测试验证，再将“采集线程”和“UI 更新”拆分，避免重复实现两套生命周期。
 
 配置保存使用临时文件加 `os.replace`，重连使用 `core/reconnect_policy.py` 的单调时间退避；这两部分都不在 UI 线程中阻塞等待。
+
+性能指标目前只做观测，不宣称已经完成线程化优化。后续比较采集线程方案时，必须在相同视频、路数和检测频率下对比 `get_performance_snapshot()` 的结果。
 
 ## 下一阶段迭代入口
 
