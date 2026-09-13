@@ -8,6 +8,7 @@ from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QPixmap, QImage
 from core.app_paths import U
 from core.reconnect_policy import ReconnectPolicy
+from core.performance_metrics import FrameMetrics
 
 class VideoWidget(QWidget):
     double_clicked = pyqtSignal()
@@ -128,6 +129,7 @@ class VideoWidget(QWidget):
 
         # -------- A2：FPS 滑窗计算器（maxlen=10 算 10 帧平均，不抖动）--------
         self._fps_times = deque(maxlen=10)
+        self.performance_metrics = FrameMetrics()
 
         # 缓存检测结果
         self.last_face_detections = []
@@ -317,6 +319,7 @@ class VideoWidget(QWidget):
         self._absence_last_motion_time = 0.0
         self._record_hour_key = ""
         self._reconnect_policy.reset(time.monotonic())
+        self.performance_metrics.reset()
 
     def set_connected(self, connected):
         if connected:
@@ -333,6 +336,10 @@ class VideoWidget(QWidget):
                     self._fps_times.clear()
             except Exception:
                 pass
+
+    def get_performance_snapshot(self):
+        """Return a cheap snapshot for diagnostics and future multi-camera dashboards."""
+        return self.performance_metrics.snapshot()
 
     def _save_frame(self, frame, subdir):
         try:
@@ -353,6 +360,7 @@ class VideoWidget(QWidget):
         # ✅ 销毁保护：对象在析构过程中，不再处理
         if getattr(self, '_destroying', False):
             return
+        frame_started = time.perf_counter()
         try:
             if self.cap is None or not self.cap.isOpened():
                 # 基于单调时钟退避，不依赖帧计数，避免不同 FPS 下重连频率失真。
@@ -403,6 +411,7 @@ class VideoWidget(QWidget):
                     pass
                 self.cap = None
                 self._reconnect_policy.failed(now)
+                self.performance_metrics.record_drop(now)
                 self.set_connected(False)
                 self.frame_counter += 1
                 return
@@ -855,6 +864,8 @@ class VideoWidget(QWidget):
                     print(f"[VideoWidget] 录像写入异常: {e}")
                     # 写入失败就停止录像，避免后续持续异常
                     self.stop_record()
+
+            self.performance_metrics.record((time.perf_counter() - frame_started) * 1000.0)
 
         except Exception as e:
             print(f"[VideoWidget] update_frame 捕获异常: {e}")
