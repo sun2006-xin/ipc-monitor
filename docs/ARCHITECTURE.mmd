@@ -1,0 +1,97 @@
+%%{init: {'theme': 'default', 'themeVariables': {'primaryColor': '#f0f6ff', 'primaryBorderColor': '#2563eb', 'primaryTextColor': '#1e293b', 'lineColor': '#94a3b8', 'tertiaryColor': '#eff6ff'}}}%%
+flowchart LR
+    %% ==================== 系统架构图（Mermaid 源码）====================
+    %% 用法：
+    %%   方法 A：打开 https://mermaid.live  粘贴本文件 → Actions → Export PNG/SVG （最简单）
+    %%   方法 B：VS Code 装 "Markdown Preview Mermaid Support" + "Mermaid" 扩展 → Ctrl+K,V 预览
+    %%   方法 C：Draw.io 打开 → 加号 → Advanced → Mermaid → 粘贴 → 自动生成结构图（可再手动微调颜色/图标）
+    %% 导出建议：PNG 2x 分辨率 宽 1600px 放 README 结构章节
+
+    %% ---- 颜色自定义 class ----
+    classDef gui fill:#ecfeff,stroke:#0891b2,stroke-width:2px,color:#083344
+    classDef core fill:#fff7ed,stroke:#ea580c,stroke-width:2px,color:#7c2d12
+    classDef ai   fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#14532d
+    classDef data fill:#faf5ff,stroke:#9333ea,stroke-width:2px,color:#581c87
+    classDef alarm fill:#fff1f2,stroke:#e11d48,stroke-width:2px,color:#881337
+
+    %% ====================== 输入层 ======================
+    subgraph INPUT["📡 输入层：多路 RTSP 摄像头"]
+        direction LR
+        CAM1["🌐 摄像头1<br>rtsp://...@camera-a.local"]
+        CAM2["🌐 摄像头2<br>rtsp://...@camera-b.local"]
+        CAMN["🌐 ...<br>最多 16 路 4×4"]
+    end
+
+    %% ====================== Qt GUI 调度层 ======================
+    subgraph GUI["🖥 PyQt5 GUI 主进程（1 个单进程，界面 + AI 推理都在同一进程，避免 IPC/锁）"]
+        direction TB
+
+        %% 主窗口 + 布局
+        MW["MainWindow<br><b>on_event_triggered 单入口联动</b>"]:::gui
+        GL["GridLayout<br>1×1/2×2/3×3/4×4 切<br>残留 stretch 清零"]:::gui
+        VW1["VideoWidget #1<br>（每路独立 timer 30ms）"]:::gui
+        VW2["VideoWidget #2"]:::gui
+        VWN["VideoWidget #N"]:::gui
+        MW --> GL
+        GL --> VW1 & VW2 & VWN
+
+        %% 工具栏（B2/B4/C4 三档入口）
+        TB["Toolbar 按钮<br>🔔静音 / 📅1×1~4×4 / 👤人脸<br>📜事件历史 / ➕设备 / ⏱定时录像<br>📡上下线告警 / 🌙夜间增强"]:::gui
+        MW --> TB
+
+        %% 弹窗对话
+        FM["FaceManagerDialog<br>单帧注册 · 10 帧多帧平均 · 人脸出现记录"]:::gui
+        EH["EventHistoryDialog<br>事件筛选 · UTF-8 BOM CSV 导出"]:::gui
+        MW --> FM & EH
+    end
+
+    %% ====================== 核心 AI 层 ======================
+    subgraph AI["🧠 核心 AI 引擎（纯 Python 函数库，可独立测试不依赖 Qt）"]
+        direction TB
+        FE["FaceEngine 人脸检测<br><b>4 层兜底链</b>：<br>① Ultralytics(best.pt)<br>→ ①.5 <b>ONNX cv2.dnn(best.onnx) 离线 CPU 兜底</b><br>→ ② Torch Hub<br>→ ③ DetectMultiBackend"]:::ai
+        FR["FaceRecognizer 人脸识别<br>dlib 68 关键点 + ResNet v1 128D 特征<br>多帧 10 帧均值 + L2 归一 · 距离阈值 0.6 · Top1 拒识"]:::ai
+        MD["MotionDetector 运动检测<br>MOG2 背景减法 · 面积阈值 1500px² · 8s 冷却"]:::ai
+        CM["ConfigManager 配置管理<br>RTSP URL 构造 · <b>密码脱敏打印 admin:****</b>"]:::core
+        EL["EventLogger 事件日志<br>9 类型落库 · CSV UTF-8 BOM 导出"]:::core
+
+        %% 推理统一入口
+        VW1 & VW2 & VWN -. "每帧 30ms 拉取" .-> FE
+        FE -->|YOLO bbox 复用 0.6ms 不二次扫| FR
+        FE -->|检测出框数 ≥ 5 / 连续3周期| C2["C2 聚集判定<br>30s 冷却"]
+        FR -->|距离 > 0.6| C1["C1 陌生人判定<br>独立 8s 冷却"]
+        VW1 & VW2 & VWN -. "每帧" .-> MD
+        MD -->|最大(人脸时间-运动时间) >600s 仅值守岗| C3["C3 离岗判定<br>单火直到活动恢复"]
+        VW1 & VW2 & VWN -. "YCrCb Y 通道 CLAHE" .-> FE
+    end
+
+    %% ====================== 持久化数据层 ======================
+    subgraph DATA["💾 数据层（.gitignore 已保护真实数据，只有 sample 放 GitHub）"]
+        direction TB
+        FACEDB["face_db.json<br>姓名 + 128D 特征 + 注册时间 + 最后出现"]:::data
+        EVENTS["events.json · CSV UTF-8 BOM 导出"]:::data
+        SNAP["snapshots/*.jpg<br>（聚集/离岗/陌生人/人脸快照）"]:::data
+        RECORD["records/*.mp4<br>B2 定时录像 YYYYMMDD_HH 每小时分片"]:::data
+        CFG["config.sample.json → config.json<br>账号密码 · 布局 · 检测阈值 · 告警开关"]:::data
+        MODELS["models/ + best.pt + best.onnx<br>4 个大权重 👉 Release Assets 下载<br>.gitignore 保护避免 push"]:::data
+    end
+
+    %% ====================== 告警联动层 ======================
+    subgraph ALARM["🚨 告警联动（单入口）"]
+        SND["🔔 winsound A4 告警音 + 一键静音"]:::alarm
+        SBAR["🟥 status_bar 3s 红底后自动还原浅色"]:::alarm
+        HISTORY["📜 A5 事件历史落库 + 9 类型过滤"]:::alarm
+    end
+
+    %% ====================== 边：联动关系 ======================
+    C1 & C2 & C3 -- "统一事件 emit(type, ch, path)" --> MW
+    B4_UPDOWN["B4 设备上线/离线<br>on_refresh 前后 online 翻转对比"] --> MW
+    B2_RECORD["B2 定时录像<br>按小时切分片 MP4"] --> RECORD
+    B3_SEARCH["B3 人脸出现记录检索<br>前缀匹配 姓名_xxx.jpg"] --> SNAP
+    B3_SEARCH --> EVENTS
+    FM -->|A3/B1 注册 新特征| FACEDB
+    MW -->|on_event_triggered| SND & SBAR & HISTORY
+    HISTORY --> EVENTS & SNAP
+    CFG --> CM
+    CM -->|构造 RTSP URL| CAM1 & CAM2 & CAMN
+    FACEDB --> FR
+    FE & FR -. 依赖权重 .-> MODELS
