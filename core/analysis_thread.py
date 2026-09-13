@@ -91,6 +91,7 @@ class AnalysisThread(QThread):
                 frame, frame_id, self.face_engine, self.motion_engine,
                 run_face, run_motion, self.face_recognizer,
             )
+            result["analysis_dropped_requests"] = self.dropped_requests
             self.result_ready.emit(result)
 
     def stop(self):
