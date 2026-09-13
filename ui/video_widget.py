@@ -986,10 +986,11 @@ class VideoWidget(QWidget):
         now = time.time()
         if now - self.last_event_time < self.event_cooldown:
             return
-        self.last_event_time = now
         filepath = self._save_frame(frame, event_type + "s")
         if filepath is None:
             return  # 保存失败就不发事件，避免下游处理空路径
+        # 只有证据文件真正落盘后才开始冷却，保存失败不能抑制下一次告警。
+        self.last_event_time = now
         self._last_event_frame_id = frame_id if frame_id is not None else self.frame_counter
         try:
             self.event_triggered.emit(event_type, self.name_label.text(), filepath)

@@ -68,6 +68,45 @@ class FrameMetricsTests(unittest.TestCase):
         self.assertEqual(widget._last_analysis_frame_id, 42)
         self.assertEqual(widget._triggered[0][2], 42)
 
+    def test_trigger_event_cooldown_suppresses_duplicate_alarm(self):
+        widget = VideoWidget.__new__(VideoWidget)
+        widget._destroying = False
+        widget.last_event_time = 0
+        widget.event_cooldown = 60
+        widget.frame_counter = 2
+        widget._last_event_frame_id = None
+        saves = []
+        widget._save_frame = lambda frame, subdir: saves.append(subdir) or "alert.jpg"
+        widget.name_label = type("Label", (), {"text": lambda self: "cam-1"})()
+        emitted = []
+        widget.event_triggered = type(
+            "Signal", (), {"emit": lambda _self, *args: emitted.append(args)}
+        )()
+
+        frame = np.zeros((2, 2, 3), dtype=np.uint8)
+        widget._trigger_event("motion", frame, frame_id=10)
+        widget._trigger_event("motion", frame, frame_id=11)
+
+        self.assertEqual(saves, ["motions"])
+        self.assertEqual(len(emitted), 1)
+        self.assertEqual(widget._last_event_frame_id, 10)
+
+    def test_trigger_event_save_failure_does_not_consume_cooldown(self):
+        widget = VideoWidget.__new__(VideoWidget)
+        widget._destroying = False
+        widget.last_event_time = 0
+        widget.event_cooldown = 60
+        widget.frame_counter = 1
+        widget._last_event_frame_id = None
+        widget._save_frame = lambda frame, subdir: None
+        widget.name_label = type("Label", (), {"text": lambda self: "cam-1"})()
+        widget.event_triggered = type("Signal", (), {"emit": lambda *_args: None})()
+
+        widget._trigger_event("face", np.zeros((2, 2, 3), dtype=np.uint8), frame_id=7)
+
+        self.assertIsNone(widget._last_event_frame_id)
+        self.assertEqual(widget.last_event_time, 0)
+
     def test_trigger_event_persists_saved_path_and_result_frame_id(self):
         widget = VideoWidget.__new__(VideoWidget)
         widget._destroying = False
