@@ -8,7 +8,7 @@ PyQt 主窗口
       └─ VideoWidget（每路摄像头一个）
           ├─ CaptureThread：后台读取 RTSP/本地摄像头帧
           │   └─ LatestFrameBuffer：只保留最新帧，避免推理延迟堆积
-          ├─ AnalysisThread：后台执行人脸检测和运动检测
+          ├─ AnalysisThread：后台执行人脸检测、运动检测和 dlib 识别
           │   └─ result_ready：把纯数据结果发回 UI 线程
           ├─ reconnect_policy：按单调时钟做指数退避重连
           ├─ face_engine：OpenCV DNN + best.onnx 人脸检测
@@ -27,14 +27,14 @@ PyQt 主窗口
 
 ## 稳定性说明
 
-当前 `VideoWidget` 使用 Qt 定时器轮询 `LatestFrameBuffer`，而 `CaptureThread` 在后台读取视频；`AnalysisThread` 负责检测和运动分析，识别、告警、绘制和录像仍在 UI 线程中执行。`core/video_manager.py` 的 `VideoThread` 仅保留兼容别名，避免重复维护两套线程实现。
+当前 `VideoWidget` 使用 Qt 定时器轮询 `LatestFrameBuffer`，而 `CaptureThread` 在后台读取视频；`AnalysisThread` 负责检测、运动分析和 dlib 识别，UI 线程只消费普通结果并负责告警、截图、绘制和录像。`core/video_manager.py` 的 `VideoThread` 仅保留兼容别名，避免重复维护两套线程实现。
 
 配置保存使用临时文件加 `os.replace`，重连使用 `core/reconnect_policy.py` 的单调时间退避；这两部分都不在 UI 线程中阻塞等待。
 
-性能指标目前只做观测，不宣称已经完成全部线程化优化。后续把 dlib 识别也拆出时，必须在相同视频、路数和检测频率下对比 `get_performance_snapshot()` 的结果，并额外记录分析队列丢弃数。
+性能指标目前只做观测，不宣称已经完成全部性能优化。下一步必须在相同视频、路数和检测频率下对比 `get_performance_snapshot()` 的结果，并额外记录分析队列丢弃数、识别延迟和告警时序。
 
 ## 下一阶段迭代入口
 
 1. 为断流重连、录像文件轮转和事件冷却增加可重复测试。
 2. 用采集线程 + 有界帧队列替代同步检测，测量 4/9/16 路 CPU、延迟和丢帧率。
-3. 将检测、识别、运动分析抽成独立服务对象，保持 `VideoWidget` 只负责显示和信号。
+3. 将检测、识别、运动分析抽成独立服务对象，继续缩小 `VideoWidget` 的业务边界。
