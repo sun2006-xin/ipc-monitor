@@ -68,6 +68,25 @@ class FrameMetricsTests(unittest.TestCase):
         self.assertEqual(widget._last_analysis_frame_id, 42)
         self.assertEqual(widget._triggered[0][2], 42)
 
+    def test_trigger_event_persists_saved_path_and_result_frame_id(self):
+        widget = VideoWidget.__new__(VideoWidget)
+        widget._destroying = False
+        widget.last_event_time = 0
+        widget.event_cooldown = 8
+        widget.frame_counter = 99
+        widget._last_event_frame_id = None
+        widget._save_frame = lambda frame, subdir: f"D:/evidence/{subdir}/alert.jpg"
+        widget.name_label = type("Label", (), {"text": lambda self: "cam-1"})()
+        emitted = []
+        widget.event_triggered = type(
+            "Signal", (), {"emit": lambda _self, *args: emitted.append(args)}
+        )()
+
+        widget._trigger_event("face", np.zeros((2, 2, 3), dtype=np.uint8), frame_id=42)
+
+        self.assertEqual(widget._last_event_frame_id, 42)
+        self.assertEqual(emitted, [("face", "cam-1", "D:/evidence/faces/alert.jpg")])
+
 
 if __name__ == "__main__":
     unittest.main()
