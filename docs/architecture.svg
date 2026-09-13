@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+  <title id="title">IPC-Monitor 系统架构</title>
+  <desc id="desc">从多路 RTSP 输入，经 PyQt5 视频通道、AI 分析和规则引擎，最终形成告警与本地数据。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#071426"/><stop offset="1" stop-color="#102a43"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="5" stdDeviation="7" flood-opacity=".25"/></filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#5eead4"/></marker>
+    <style>.t{font-family:'Microsoft YaHei','Noto Sans SC',sans-serif;fill:#e6f4ff}.h{font-size:28px;font-weight:700}.s{font-size:18px;font-weight:700}.b{font-size:14px;fill:#b9d5e8}.box{stroke-width:2;rx:18;filter:url(#shadow)}.line{stroke:#5eead4;stroke-width:3;fill:none;marker-end:url(#arrow)}</style>
+  </defs>
+  <rect width="1200" height="620" rx="24" fill="url(#bg)"/>
+  <text x="60" y="62" class="t h">IPC-Monitor 系统架构</text>
+  <text x="60" y="92" class="t b">视频、算法、规则与数据完全在本机闭环处理</text>
+
+  <rect x="55" y="145" width="190" height="330" fill="#123a5a" stroke="#38bdf8" class="box"/>
+  <text x="150" y="188" text-anchor="middle" class="t s">输入层</text>
+  <text x="150" y="236" text-anchor="middle" class="t b">多路 RTSP 摄像头</text>
+  <text x="150" y="272" text-anchor="middle" class="t b">视频帧 / 连接状态</text>
+  <text x="150" y="335" text-anchor="middle" class="t b">不内置设备地址</text>
+  <text x="150" y="368" text-anchor="middle" class="t b">不内置登录凭据</text>
+
+  <rect x="300" y="125" width="235" height="370" fill="#16324f" stroke="#60a5fa" class="box"/>
+  <text x="418" y="168" text-anchor="middle" class="t s">界面与通道层</text>
+  <text x="418" y="214" text-anchor="middle" class="t b">PyQt5 MainWindow</text>
+  <text x="418" y="248" text-anchor="middle" class="t b">VideoWidget × N</text>
+  <text x="418" y="282" text-anchor="middle" class="t b">自动网格 / 全屏 / 回放</text>
+  <text x="418" y="336" text-anchor="middle" class="t b">按检测间隔抽帧</text>
+  <text x="418" y="370" text-anchor="middle" class="t b">原始帧用于显示与录像</text>
+  <text x="418" y="404" text-anchor="middle" class="t b">增强帧仅用于算法分析</text>
+
+  <rect x="590" y="105" width="260" height="410" fill="#123e43" stroke="#2dd4bf" class="box"/>
+  <text x="720" y="148" text-anchor="middle" class="t s">AI 分析层</text>
+  <text x="720" y="196" text-anchor="middle" class="t b">低照度 CLAHE（可选）</text>
+  <text x="720" y="235" text-anchor="middle" class="t b">OpenCV DNN + best.onnx</text>
+  <text x="720" y="269" text-anchor="middle" class="t b">输出人脸框与置信度</text>
+  <text x="720" y="321" text-anchor="middle" class="t b">dlib 关键点 + 128D 特征</text>
+  <text x="720" y="355" text-anchor="middle" class="t b">欧氏距离身份匹配</text>
+  <text x="720" y="407" text-anchor="middle" class="t b">MOG2 运动区域检测</text>
+  <text x="720" y="446" text-anchor="middle" class="t b">复用检测框，减少重复扫描</text>
+
+  <rect x="905" y="125" width="240" height="370" fill="#3b234e" stroke="#c084fc" class="box"/>
+  <text x="1025" y="168" text-anchor="middle" class="t s">规则、告警与数据</text>
+  <text x="1025" y="214" text-anchor="middle" class="t b">陌生人 / 聚集 / 离岗</text>
+  <text x="1025" y="248" text-anchor="middle" class="t b">设备上下线 / 人脸 / 运动</text>
+  <text x="1025" y="302" text-anchor="middle" class="t b">独立冷却与连续周期判断</text>
+  <text x="1025" y="356" text-anchor="middle" class="t b">状态栏 + 声音提醒</text>
+  <text x="1025" y="390" text-anchor="middle" class="t b">事件历史 + CSV</text>
+  <text x="1025" y="424" text-anchor="middle" class="t b">截图 / 录像 / 人脸库</text>
+
+  <path d="M245 310 H295" class="line"/><path d="M535 310 H585" class="line"/><path d="M850 310 H900" class="line"/>
+  <rect x="300" y="550" width="550" height="38" rx="19" fill="#0b253b" stroke="#334e68"/>
+  <text x="575" y="575" text-anchor="middle" class="t b">数据目录：data/config.json · face_db.json · events · snapshots · records · logs</text>
+</svg>
