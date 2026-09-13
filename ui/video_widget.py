@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, Q
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QPixmap, QImage
 from core.app_paths import U
+from core.reconnect_policy import ReconnectPolicy
 
 class VideoWidget(QWidget):
     double_clicked = pyqtSignal()
@@ -166,7 +167,8 @@ class VideoWidget(QWidget):
             self._clahe = None
 
         # ✅ 重连退避计数器：避免网络抖动时频繁创建/销毁 VideoCapture（句柄泄漏 + 崩溃）
-        self._reconnect_backoff = 0
+        self._reconnect_policy = ReconnectPolicy()
+        self._reconnect_policy.reset(time.monotonic())
         # ✅ 销毁保护：防止 QTimer 在对象析构过程中仍回调
         self._destroying = False
 
@@ -262,7 +264,7 @@ class VideoWidget(QWidget):
             return
 
         # ✅ 启动成功，重置重连退避
-        self._reconnect_backoff = 0
+        self._reconnect_policy.reset(time.monotonic())
         from core.config_manager import ConfigManager as _CM3
         print(f"✅ [VideoWidget] RTSP 连接成功: {_CM3.redact_rtsp(rtsp_url)}")
         self.set_connected(True)
@@ -314,7 +316,7 @@ class VideoWidget(QWidget):
         self._absence_last_face_time = 0.0
         self._absence_last_motion_time = 0.0
         self._record_hour_key = ""
-        self._reconnect_backoff = 0
+        self._reconnect_policy.reset(time.monotonic())
 
     def set_connected(self, connected):
         if connected:
@@ -353,10 +355,9 @@ class VideoWidget(QWidget):
             return
         try:
             if self.cap is None or not self.cap.isOpened():
-                # 退避重连：每 2^(backoff) 次回调尝试一次，避免网络断开时暴力 33Hz 重连
-                self._reconnect_backoff = min(self._reconnect_backoff + 1, 8)
-                if (self.frame_counter & ((1 << self._reconnect_backoff) - 1)) != 0:
-                    self.frame_counter += 1
+                # 基于单调时钟退避，不依赖帧计数，避免不同 FPS 下重连频率失真。
+                now = time.monotonic()
+                if not self._reconnect_policy.can_attempt(now):
                     return
                 # 尝试重连（此处不 sleep，避免阻塞主线程）
                 try:
@@ -376,7 +377,7 @@ class VideoWidget(QWidget):
                         except Exception:
                             pass
                         self.set_connected(True)
-                        self._reconnect_backoff = 0
+                        self._reconnect_policy.reset(now)
                     else:
                         self.set_connected(False)
                         if self.cap:
@@ -395,21 +396,20 @@ class VideoWidget(QWidget):
             ret, frame = self.cap.read()
             if not ret:
                 # ✅ 读取失败：退避重连，不 time.sleep（原代码 0.5s 阻塞主线程 → 卡死/无响应 → "闪退"感）
-                self._reconnect_backoff = min(self._reconnect_backoff + 1, 8)
-                if self._reconnect_backoff <= 1:
-                    try:
-                        if self.cap:
-                            self.cap.release()
-                    except Exception:
-                        pass
-                    self.cap = None
+                now = time.monotonic()
+                try:
+                    self.cap.release()
+                except Exception:
+                    pass
+                self.cap = None
+                self._reconnect_policy.failed(now)
                 self.set_connected(False)
                 self.frame_counter += 1
                 return
 
             # 读取成功：重置退避
-            if self._reconnect_backoff != 0:
-                self._reconnect_backoff = 0
+            if self._reconnect_policy.attempts != 0:
+                self._reconnect_policy.reset(time.monotonic())
                 self.set_connected(True)
 
             self.current_frame = frame
