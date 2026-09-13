@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
     QDialog, QAction, QMenu, QMessageBox, QCheckBox, QComboBox,
     QFileDialog, QApplication,
 )
+from core.version import APP_VERSION
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap
 
@@ -32,7 +33,7 @@ from ui.face_manager_dialog import FaceManagerDialog
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("IPC 智能监控系统")
+        self.setWindowTitle(f"IPC 智能监控系统 v{APP_VERSION}")
         self.setGeometry(100, 50, 1280, 780)
 
         # 窗口销毁保护：防止 QTimer.singleShot 等在析构后仍回调

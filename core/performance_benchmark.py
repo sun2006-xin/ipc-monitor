@@ -116,7 +116,7 @@ def _read_video(video_path, camera_id, max_frames):
 
 def run_video_benchmark(video_path, camera_count=1, max_frames=30,
                         face_engine=None, motion_engine_factory=None,
-                        face_recognizer=None):
+                        face_recognizer=None, max_workers=None):
     """Run the real analysis pipeline against a local fixed video.
 
     The video is opened independently for each logical camera, while callers
@@ -147,7 +147,9 @@ def run_video_benchmark(video_path, camera_count=1, max_frames=30,
 
     metrics = FrameMetrics(window=max(2, camera_count * max_frames))
     result_frame_ids = {camera_id: [] for camera_id in range(camera_count)}
-    with ThreadPoolExecutor(max_workers=camera_count) as executor:
+    worker_count = max_workers if max_workers is not None else camera_count
+    worker_count = max(1, min(int(worker_count), camera_count))
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(analyze_camera, camera_id)
                    for camera_id in range(camera_count)]
         for future in futures:
