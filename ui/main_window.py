@@ -245,6 +245,15 @@ class MainWindow(QMainWindow):
         toolbar_box.setLayout(toolbar)
         right_layout.addWidget(toolbar_box, stretch=0)
 
+        self.diagnostics_label = QLabel("诊断 | 在线 0 | 分析丢弃 0 | 最近分析帧 -- | 最近告警帧 --")
+        self.diagnostics_label.setToolTip("只读运行指标：分析丢弃数、最近分析结果帧和最近告警截图帧")
+        self.diagnostics_label.setStyleSheet(
+            "QLabel { background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 3px;"
+            " padding: 1px 6px; color: #475569; font-family: Consolas, 'Courier New', monospace; font-size: 10px; }"
+        )
+        self.diagnostics_label.setMaximumHeight(20)
+        right_layout.addWidget(self.diagnostics_label, stretch=0)
+
         self.grid_widget = GridLayoutWidget()
         # -------- 视频网格：白色背景 + 细边框，按钮→网格→状态栏 像"三块拼图"紧贴在一起 --------
         self.grid_widget.setStyleSheet(
@@ -261,6 +270,10 @@ class MainWindow(QMainWindow):
             "color: #111827; font-size: 12px;"
         )
         right_layout.addWidget(self.status_bar, stretch=0)
+
+        self.diagnostics_timer = QTimer(self)
+        self.diagnostics_timer.timeout.connect(self._update_diagnostics)
+        self.diagnostics_timer.start(1000)
 
         main_layout.addWidget(right, stretch=1)  # stretch=1：右区拿到一切横向上多余空间，左栏再变不会挤压视频
 
@@ -580,6 +593,41 @@ class MainWindow(QMainWindow):
         except Exception as _b4_total:
             self.logger.error(f"B4 上下线告警整体异常: {_b4_total}")
 
+    @staticmethod
+    def _format_diagnostics(snapshots):
+        """Format read-only per-channel snapshots without touching Qt widgets."""
+        snapshots = list(snapshots or [])
+        online = len(snapshots)
+        dropped = sum(int(item.get("analysis_dropped_requests", 0) or 0) for item in snapshots)
+        analysis_ids = [item.get("last_analysis_frame_id") for item in snapshots
+                        if item.get("last_analysis_frame_id") is not None]
+        event_ids = [item.get("last_event_frame_id") for item in snapshots
+                     if item.get("last_event_frame_id") is not None]
+        latest_analysis = max(analysis_ids) if analysis_ids else "--"
+        latest_event = max(event_ids) if event_ids else "--"
+        return f"诊断 | 在线 {online} | 分析丢弃 {dropped} | 最近分析帧 {latest_analysis} | 最近告警帧 {latest_event}"
+
+    def _update_diagnostics(self):
+        if getattr(self, "_destroyed", False):
+            return
+        snapshots = []
+        channels = getattr(getattr(self, "grid_widget", None), "channels", [])
+        active_ids = list(getattr(self, "active_ids", []) or [])
+        for index, channel in enumerate(channels):
+            if index >= len(active_ids) or not active_ids[index]:
+                continue
+            try:
+                snapshots.append(channel.get_performance_snapshot())
+            except Exception as exc:
+                try:
+                    self.logger.error(f"读取诊断指标异常: {exc}")
+                except Exception:
+                    pass
+        try:
+            self.diagnostics_label.setText(self._format_diagnostics(snapshots))
+        except Exception:
+            pass
+
     # ================================================================
     # A1：自动布局核心方法（经验 147363：布局变化入口统一走单一函数，不散落多处各自算）
     # ================================================================
@@ -868,6 +916,8 @@ class MainWindow(QMainWindow):
         try:
             if getattr(self, 'refresh_timer', None):
                 self.refresh_timer.stop()
+            if getattr(self, 'diagnostics_timer', None):
+                self.diagnostics_timer.stop()
         except Exception:
             pass
         # 2) 先断开所有通道的事件信号，再逐一清理
