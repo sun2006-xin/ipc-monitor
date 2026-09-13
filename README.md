@@ -2,6 +2,8 @@
 
 IPC-Monitor 是一个面向 Windows 的多路 RTSP 摄像头监控与本地人脸分析工具。它提供可视化摄像头管理、自动网格布局、录像回放、事件历史、人脸注册与识别、陌生人告警、人员聚集检测、值守状态检测和低照度增强。
 
+当前 `main` 是 `v1.1.0` 之后的持续开发主线，下一次正式版本将在固定视频性能基准和学习材料收口后再发布。项目同时适合作为一个可运行的监控工具和一个 PyQt、OpenCV、ONNX、dlib 多线程实践项目。
+
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/downloads/)
 [![Platform](https://img.shields.io/badge/Platform-Windows-0078D4.svg)](#)
@@ -26,6 +28,19 @@ IPC-Monitor 是一个面向 Windows 的多路 RTSP 摄像头监控与本地人�
 - 多路共享 OpenCV DNN 时，检测器的 `setInput/forward` 已串行保护，并过滤 NaN/Infinity 输出，避免并发下坐标异常导致崩溃；真实吞吐仍需按设备复测。
 - 可运行 `python tools/run_performance_benchmark.py --queue-pressure --frames 12 --delay-ms 5` 验证最新请求优先：12 次提交只处理最后帧，丢弃数为 11。
 - 主界面底部诊断栏每秒汇总实际占用通道的分析丢弃数、最近分析帧和最近告警帧，便于排查“告警截图是否落后”。
+
+## 学习与无摄像头验证
+
+- 学习路线见桌面文档《IPC 摄像头系统：从入门到独立实现》，按“能运行 → 能解释 → 能测试 → 能重写”逐步练习。
+- 没有摄像头时，可使用仓库中的固定录像和 fake capture 验证线程、录像、告警证据和资源释放；这类结果不替代真实 RTSP 验收。
+- 固定视频真实模型基准建议从单路、少帧数开始，再逐步扩展到 1/4/9 路；如果 Windows 可用虚拟内存不足，应记录为环境阻断并分批运行。
+
+## 后续路线
+
+1. 固定视频 + 真实 ONNX/dlib 的可重复性能报告。
+2. 将检测、识别和运动分析继续从 `VideoWidget` 拆成独立服务对象。
+3. 将测试、隐私扫描、打包自检和版本信息固化到 GitHub Actions。
+4. 接入真实摄像头后，再补 RTSP 断线恢复、30 分钟 EXE 运行和误报/漏报记录。
 
 ## 直接运行 EXE
 
