@@ -6,6 +6,7 @@ from datetime import datetime
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QSizePolicy
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from PyQt5.QtGui import QPixmap, QImage
+from core.app_paths import U
 
 class VideoWidget(QWidget):
     double_clicked = pyqtSignal()
@@ -110,7 +111,8 @@ class VideoWidget(QWidget):
         self.motion_alarm = False
         self.is_recording = False
         self.video_writer = None
-        self.data_root = "data"
+        # 所有运行时数据统一落到用户数据目录，避免从不同工作目录启动时写散。
+        self.data_root = U("data")
         for sub in ["snapshots", "records", "motions", "faces"]:
             try:
                 os.makedirs(os.path.join(self.data_root, sub), exist_ok=True)
