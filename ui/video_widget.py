@@ -9,6 +9,7 @@ from PyQt5.QtGui import QPixmap, QImage
 from core.app_paths import U
 from core.reconnect_policy import ReconnectPolicy
 from core.performance_metrics import FrameMetrics
+from core.capture_thread import CaptureThread
 
 class VideoWidget(QWidget):
     double_clicked = pyqtSignal()
@@ -101,6 +102,7 @@ class VideoWidget(QWidget):
 
         # 核心变量
         self.cap = None
+        self.capture_thread = None
         self.rtsp_url = None
         self.current_pixmap = None
         self.current_frame = None
@@ -239,37 +241,20 @@ class VideoWidget(QWidget):
         safe_url = _CM.redact_rtsp(rtsp_url)
         print(f"[VideoWidget] 尝试连接 RTSP: {safe_url}")
         try:
-            # ✅ 对 RTSP 场景推荐设置缓冲降低延迟 + 尝试 TCP 传输（避免 UDP 丢包导致的崩溃）
-            self.cap = cv2.VideoCapture(rtsp_url)
-            if self.cap is not None and self.cap.isOpened():
-                try:
-                    self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-                    self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-                except Exception:
-                    pass
+            # 采集在线程中进行，UI 定时器只轮询最新帧，避免 read() 阻塞窗口。
+            self.capture_thread = CaptureThread(rtsp_url, fps=30, parent=self)
+            self.capture_thread.status_changed.connect(self.set_connected)
+            self.capture_thread.start()
         except Exception as e:
-            print(f"❌ [VideoWidget] 创建 VideoCapture 异常: {e}")
-            self.cap = None
-            return
-
-        if self.cap is None or not self.cap.isOpened():
-            # 脱敏打印
-            from core.config_manager import ConfigManager as _CM2
-            print(f"❌ [VideoWidget] 无法打开 RTSP: {_CM2.redact_rtsp(rtsp_url)}")
+            print(f"❌ [VideoWidget] 创建采集线程异常: {e}")
+            self.capture_thread = None
             self.set_connected(False)
-            if self.cap:
-                try:
-                    self.cap.release()
-                except Exception:
-                    pass
-                self.cap = None
             return
 
-        # ✅ 启动成功，重置重连退避
         self._reconnect_policy.reset(time.monotonic())
         from core.config_manager import ConfigManager as _CM3
-        print(f"✅ [VideoWidget] RTSP 连接成功: {_CM3.redact_rtsp(rtsp_url)}")
-        self.set_connected(True)
+        print(f"⏳ [VideoWidget] 已启动后台采集: {_CM3.redact_rtsp(rtsp_url)}")
+        self.set_connected(False)
         self.timer.start(30)  # 33 FPS
 
     def stop(self):
@@ -279,7 +264,14 @@ class VideoWidget(QWidget):
                 self.timer.stop()
         except Exception:
             pass
-        # ✅ 安全释放 VideoCapture（空值保护 + 异常吞掉）
+        # 先停止后台采集线程；VideoCapture 只在线程自身 finally 中释放。
+        if self.capture_thread is not None:
+            try:
+                self.capture_thread.stop()
+            except Exception as e:
+                print(f"[VideoWidget] 停止采集线程异常: {e}")
+            self.capture_thread = None
+        # 兼容旧路径：若有遗留 cap，也安全释放。
         if self.cap is not None:
             try:
                 self.cap.release()
@@ -362,7 +354,14 @@ class VideoWidget(QWidget):
             return
         frame_started = time.perf_counter()
         try:
-            if self.cap is None or not self.cap.isOpened():
+            if self.capture_thread is not None:
+                frame = self.capture_thread.get_latest_frame()
+                if frame is None:
+                    self.performance_metrics.record_drop(time.monotonic())
+                    return
+                self.current_frame = frame
+                self.frame_counter += 1
+            elif self.cap is None or not self.cap.isOpened():
                 # 基于单调时钟退避，不依赖帧计数，避免不同 FPS 下重连频率失真。
                 now = time.monotonic()
                 if not self._reconnect_policy.can_attempt(now):
@@ -401,28 +400,29 @@ class VideoWidget(QWidget):
                 self.frame_counter += 1
                 return
 
-            ret, frame = self.cap.read()
-            if not ret:
-                # ✅ 读取失败：退避重连，不 time.sleep（原代码 0.5s 阻塞主线程 → 卡死/无响应 → "闪退"感）
-                now = time.monotonic()
-                try:
-                    self.cap.release()
-                except Exception:
-                    pass
-                self.cap = None
-                self._reconnect_policy.failed(now)
-                self.performance_metrics.record_drop(now)
-                self.set_connected(False)
+            elif self.cap is not None:
+                ret, frame = self.cap.read()
+                if not ret:
+                    # ✅ 读取失败：退避重连，不 time.sleep（原代码 0.5s 阻塞主线程 → 卡死/无响应 → "闪退"感）
+                    now = time.monotonic()
+                    try:
+                        self.cap.release()
+                    except Exception:
+                        pass
+                    self.cap = None
+                    self._reconnect_policy.failed(now)
+                    self.performance_metrics.record_drop(now)
+                    self.set_connected(False)
+                    self.frame_counter += 1
+                    return
+
+                # 读取成功：重置退避
+                if self._reconnect_policy.attempts != 0:
+                    self._reconnect_policy.reset(time.monotonic())
+                    self.set_connected(True)
+
+                self.current_frame = frame
                 self.frame_counter += 1
-                return
-
-            # 读取成功：重置退避
-            if self._reconnect_policy.attempts != 0:
-                self._reconnect_policy.reset(time.monotonic())
-                self.set_connected(True)
-
-            self.current_frame = frame
-            self.frame_counter += 1
             # ✅ 防止超长时间运行后计数器溢出（虽然 Python int 不会溢出，但防止取模前的值过大影响判断精度）
 
             # ================================================================
@@ -829,8 +829,11 @@ class VideoWidget(QWidget):
                             rec_dir = os.path.join(self.data_root, "records")
                             os.makedirs(rec_dir, exist_ok=True)
                             fname = os.path.join(rec_dir, f"B2定时分片_{name_cn}_{ts}.mp4")
-                            fw = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 640)
-                            fh = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 480)
+                            if self.cap is not None:
+                                fw = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 640)
+                                fh = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 480)
+                            else:
+                                fh, fw = frame.shape[:2]
                             if fw > 0 and fh > 0:
                                 self._frame_size = (fw, fh)
                                 try:
