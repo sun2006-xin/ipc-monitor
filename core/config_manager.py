@@ -3,12 +3,18 @@ import os
 import shutil
 from datetime import datetime
 import uuid
+from core.app_paths import R, U
+
 
 class ConfigManager:
-    def __init__(self, config_path="data/config.json", backup_path="data/backups/"):
-        self.config_path = config_path
-        self.backup_path = backup_path
-        os.makedirs(backup_path, exist_ok=True)
+    def __init__(self, config_path=None, backup_path=None):
+        # PyInstaller EXE 兼容：配置和备份都是"用户可写"的，绝对不能落到 _MEIPASS 临时目录
+        self.config_path = config_path if config_path else U("data/config.json")
+        self.backup_path = backup_path if backup_path else U("data/backups/")
+        try:
+            os.makedirs(self.backup_path, exist_ok=True)
+        except Exception:
+            pass
         self.config = self.load()
 
     def load(self):
@@ -28,18 +34,9 @@ class ConfigManager:
             json.dump(self.config, f, indent=2, ensure_ascii=False)
 
     def default_config(self):
+        """Return a privacy-safe configuration with no preset camera."""
         return {
-            "devices": [
-                {
-                    "id": str(uuid.uuid4()),
-                    "name": "客厅摄像头",
-                    "ip": "192.168.0.102",
-                    "password": "20060312Yebao-",
-                    "stream": "stream1",
-                    "online": True,
-                    "enabled": True
-                }
-            ],
+            "devices": [],
             "layout": {"rows": 2, "cols": 2},
             "detection": {
                 "face_interval": 5,
@@ -50,12 +47,12 @@ class ConfigManager:
             },
             "alarm": {
                 "sound_enabled": True,
-                "sound_file": "resources/sounds/alarm.wav",
+                "sound_file": R("resources/sounds/alarm.wav"),
                 "popup_enabled": False,
                 "status_bar_style": "red"
             },
             "language": "zh",
-            "recording": {"save_path": "data/records"},
+            "recording": {"save_path": U("data/records")},
             "logs": {"max_size_mb": 50, "max_backup": 5}
         }
 
@@ -84,7 +81,36 @@ class ConfigManager:
         return self.config.get("devices", [])
 
     def get_rtsp_url(self, device):
-        return f"rtsp://admin:{device.get('password','')}@{device['ip']}:554/{device.get('stream','stream1')}"
+        """
+        构造标准 RTSP URL：rtsp://{username}:{password}@{ip}:{port}/{stream}
+        - username / port 兼容老配置没写时退化 admin / 554
+        """
+        username = device.get('username', 'admin')
+        password = device.get('password', '')
+        ip = device.get('ip', '')
+        port = device.get('port', 554)
+        stream = device.get('stream', 'stream1')
+        return f"rtsp://{username}:{password}@{ip}:{port}/{stream}"
+
+    @staticmethod
+    def redact_rtsp(url: str) -> str:
+        """
+        🛡 开源打印日志前 脱敏：rtsp://<user>:<secret>@<camera-host>:554/stream
+                                       → rtsp://<user>:****@<camera-host>:554/stream
+        """
+        if not isinstance(url, str) or '://' not in url:
+            return url
+        try:
+            _head, _tail = url.split('://', 1)
+            if '@' not in _tail:
+                return url
+            _userinfo, _rest = _tail.split('@', 1)
+            if ':' in _userinfo:
+                _u, _p = _userinfo.split(':', 1)
+                return f"{_head}://{_u}:****@{_rest}"
+            return f"{_head}://****@{_rest}"
+        except Exception:
+            return url
 
     def add_device(self, device_data):
         device_data["id"] = str(uuid.uuid4())

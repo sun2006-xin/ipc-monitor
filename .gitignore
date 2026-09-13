@@ -1,66 +1,85 @@
-# ====== Python ======
+# ===== Python / Bytecode =====
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-*.pyd
 *.egg-info/
-*.egg
 dist/
 build/
-eggs/
-.eggs/
-wheels/
-# 第三方 whl 太大且都有官方下载源，不放仓库（老师/协作者按 requirements.txt 指引下就行）
-*.whl
+*.egg
 
-# ====== 临时脚本（仅本地调试用）======
-test_*.py
-run_pyi.py
-build_exe*.ps1
-build_exe*.cmd
-
-# ====== Virtual Env / IDE ======
+# ===== Virtual Environment (让使用者自己建 venv，用户说"依赖库让他们自己下") =====
+.venv/
 venv/
-.yenv/
 env/
+ENV/
+env.bak/
+venv.bak/
+
+# ===== IDE / OS =====
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
 .DS_Store
 Thumbs.db
 
-# ====== PyInstaller ======
+# ===== Qt / PyInstaller 打包产物 =====
 *.spec
-build_exe.log
-pyi_stdout.log
-pyi_stderr.log
+.spec.bak
+__pyinstaller/
+dist/
+build/
+*.exe
+*.dll
+*.pdb
+*.manifest
 
-# ====== Application runtime data (隐私 + 大文件 + 运行日志，默认全部不进 GitHub) ======
-data/logs/
-data/backups/
-data/snapshots/
-data/records/
-data/motions/
-data/faces/
-data/face_db.json
+# ===== Sensitive local data: never commit camera credentials, faces, recordings, or logs =====
 data/config.json
+data/face_db.json
+data/logs/*.log
+data/logs/*.err
+data/backups/*.json
+data/faces/*.jpg
+data/faces/*.jpeg
+data/faces/*.png
+data/motions/*.jpg
+data/snapshots/*.jpg
+data/snapshots/*.png
+data/records/*.mp4
+data/records/*.avi
+data/cache/
+data/.cache/
 
-# ====== 大型模型权重 / ONNX 运行时模型，仓库不放二进制 ======
-best.pt
-best.onnx
-*.engine
-*.trt
+# ========== ✅ 已放行（实测 4 权重全部 < GitHub 100MB 免费上限，clone 后直接跑无需额外下载）==========
+# best.pt                                    54.13 MB  optional YOLOv5 face detector
+# best.onnx                                  27.21 MB  YOLOv5 人脸检测 ONNX（cv2.dnn CPU 兜底）
+# models/shape_predictor_68_face_landmarks.dat   95.08 MB  dlib 68 点关键点模型
+# models/dlib_face_recognition_resnet_model_v1.dat 21.43 MB dlib 128D 人脸识别 ResNet v1
+# （以上 4 个合计 ≈198 MB，放 Git 不触发 GH001 报错。若未来版本超过 100MB，才需改走 Release Assets）
+
+# ========== 🔴 未知/大尺寸模型：保留排除（避免用户随手扔进来其他 >100MB 模型直接 push 失败）==========
+models/*.dat.bak
+*.pth
+*.bin
 *.safetensors
+*.gguf
+*.ggml
+*.ckpt
 
-# ====== dlib 预训练模型（大文件且有官方下载源，README 说明获取方式即可）======
-models/shape_predictor_68_face_landmarks.dat
-models/dlib_face_recognition_resnet_model_v1.dat
-
-# ====== 敏感配置备份 / 临时交付产物 ======
-*.bak
-*.zip
-*.7z
-*.rar
-~$*.pptx
+# ===== Local build/release and documentation-generation artifacts =====
+/6.10.0
+/IPC-Monitor.exe
+/ipc_monitor_exe.zip
+/ipc_monitor_open/
+/build_err.txt
+/build_log*.txt
+/generate_doc.py
+/sanitize_open_source.py
+/OPENSOURCE_GUIDE.md
+/docs/image_prompts.md
+/docs/poster_overview.png
+/docs/structure_diagram.png
+/docs/algorithm_detail.png

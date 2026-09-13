@@ -1,9 +1,64 @@
 import sys
 import os
+import io
 import traceback
 from datetime import datetime
+
+# ================================================================
+# 最最顶端 stdout/stderr 编码双保险（必须放在 PyQt5 / core / ui 所有 import 之前！）
+# 旧问题 1：PowerShell 用 -RedirectStandardOutput 给 --windowed GUI 进程强制分配 GBK(cp936) 管道
+#          → 模块级 print 只要有中文/emoji 非 GBK 字符 → UnicodeEncodeError → 进程 ExitCode=1 死在 import 阶段
+#          （crash handler / Logger 都还没装，连日志都没有）
+# 旧问题 2：老师那边如果启动命令被重定向，同样会触发 1；
+#          另外还有 stdout==None 的情况（PyInstaller --windowed 双击），不绑定会变成 NUL 写错误
+# 处理原则：全都改成 UTF-8 + errors='replace'，任何 print 编码错误绝不影响程序启动
+# ================================================================
+os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
+os.environ.setdefault('PYTHONUTF8', '1')
+for _stream_name in ('stdout', 'stderr'):
+    try:
+        _orig = getattr(sys, _stream_name, None)
+        if _orig is None:
+            # PyInstaller --windowed 双击：stdout/stderr 默认 None → 绑到 devnull UTF-8 写
+            _null = open(os.devnull, 'w', encoding='utf-8', errors='replace')
+            setattr(sys, _stream_name, _null)
+            continue
+        _buf = getattr(_orig, 'buffer', None)
+        if _buf is not None:
+            try:
+                _wrapped = io.TextIOWrapper(
+                    _buf, encoding='utf-8', errors='replace', line_buffering=True
+                )
+                setattr(sys, _stream_name, _wrapped)
+                continue
+            except Exception:
+                pass
+        # 兜底：有些进程重定向没有 buffer，直接 reconfigure
+        try:
+            _cfg = getattr(_orig, 'reconfigure', None)
+            if callable(_cfg):
+                _cfg(encoding='utf-8', errors='replace')
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+# 默认检测后端是 OpenCV DNN + ONNX，不在应用启动阶段加载 PyTorch。
+# 只有 ONNX 不可用时，FaceEngine 才会懒加载可选的 PyTorch/Ultralytics 后端。
+
+
 from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import Qt
+
+# ================================================================
+# ✅ PyInstaller 路径中枢（最先导入，所有 core/ui 里的 R/U 都受其控制）
+#   - 源码模式：R()/U() 都指向 main.py 同级（项目根）
+#   - EXE 模式： R()→%TEMP%/_MEIxxxxx(权重+qm+wav+PNG只读)，U()→IPC-Monitor.exe同级(可写config/人脸库/日志)
+# ================================================================
+from core.app_paths import ensure_user_dirs, U
+
+USER_DATA_ROOT = ensure_user_dirs()
 
 # ================================================================
 # ✅ 全局异常 / 崩溃保护
@@ -12,7 +67,7 @@ from PyQt5.QtCore import Qt
 # 这里安装 sys.excepthook + Qt message handler，把所有异常写入日志文件，
 # 并尽量让程序不立即崩溃，方便定位问题。
 # ================================================================
-_CRASH_LOG_DIR = os.path.join("data", "logs")
+_CRASH_LOG_DIR = U("data/logs")
 
 
 def _write_crash_log(title, text):
@@ -67,9 +122,17 @@ if __name__ == "__main__":
     except Exception:
         pass
 
-    os.makedirs("data", exist_ok=True)
-    os.makedirs(_CRASH_LOG_DIR, exist_ok=True)
-    os.makedirs("data/backups", exist_ok=True)
+    # 早期 ensure_user_dirs 已经建好 data/logs/backups 等，这里只补一层兜底（防止 import 顺序变化）
+    try:
+        os.makedirs(U("data"), exist_ok=True)
+        os.makedirs(_CRASH_LOG_DIR, exist_ok=True)
+        os.makedirs(U("data/backups"), exist_ok=True)
+        os.makedirs(U("data/snapshots"), exist_ok=True)
+        os.makedirs(U("data/records"), exist_ok=True)
+        os.makedirs(U("data/motions"), exist_ok=True)
+        os.makedirs(U("data/faces"), exist_ok=True)
+    except Exception:
+        pass
 
     # 安装全局异常钩子：所有 Python 未捕获异常都会走这里（包括大部分 PyQt 信号槽中的异常）
     sys.excepthook = _global_excepthook
