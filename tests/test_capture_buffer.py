@@ -49,6 +49,66 @@ class CaptureThreadLifecycleTests(unittest.TestCase):
         self.assertFalse(worker.isRunning())
         self.assertTrue(fake.released)
 
+    def test_repeated_start_stop_cycles_release_every_capture(self):
+        captures = []
+
+        class FakeCapture:
+            def __init__(self):
+                self.released = False
+                captures.append(self)
+
+            def set(self, *_args):
+                return True
+
+            def isOpened(self):
+                return not self.released
+
+            def read(self):
+                return (True, "frame")
+
+            def release(self):
+                self.released = True
+
+        for _ in range(20):
+            worker = CaptureThread("fake", fps=1000, capture_factory=lambda _source: FakeCapture())
+            worker.start()
+            deadline = time.monotonic() + 1.0
+            while worker.get_latest_frame() is None and time.monotonic() < deadline:
+                time.sleep(0.002)
+            worker.stop()
+            self.assertFalse(worker.isRunning())
+
+        self.assertEqual(len(captures), 20)
+        self.assertTrue(all(capture.released for capture in captures))
+
+    def test_read_failure_releases_capture_before_worker_stop(self):
+        class FailingCapture:
+            def __init__(self):
+                self.released = False
+
+            def set(self, *_args):
+                return True
+
+            def isOpened(self):
+                return not self.released
+
+            def read(self):
+                return (False, None)
+
+            def release(self):
+                self.released = True
+
+        fake = FailingCapture()
+        worker = CaptureThread("fake", fps=1000, capture_factory=lambda _source: fake)
+        worker.start()
+        deadline = time.monotonic() + 1.0
+        while not fake.released and time.monotonic() < deadline:
+            time.sleep(0.005)
+        worker.stop()
+
+        self.assertTrue(fake.released)
+        self.assertFalse(worker.isRunning())
+
 
 if __name__ == "__main__":
     unittest.main()
