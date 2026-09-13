@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from core.runtime_soak import append_sample, summarize_soak_csv
+from core.runtime_soak import append_sample, assess_soak_summary, summarize_soak_csv
 
 
 class RuntimeSoakSummaryTests(unittest.TestCase):
@@ -31,6 +31,17 @@ class RuntimeSoakSummaryTests(unittest.TestCase):
             path.write_text("timestamp_utc,pid,rss_mb,threads,cpu_percent\n", encoding="utf-8")
             with self.assertRaises(ValueError):
                 summarize_soak_csv(path)
+
+    def test_assessment_marks_growth_for_review_without_claiming_leak(self):
+        result = assess_soak_summary({"rss_delta_mb": 60, "thread_delta": 3})
+        self.assertEqual(result["status"], "REVIEW")
+        self.assertEqual(len(result["warnings"]), 2)
+
+    def test_assessment_passes_stable_summary(self):
+        self.assertEqual(
+            assess_soak_summary({"rss_delta_mb": 1, "thread_delta": 0}),
+            {"status": "PASS", "warnings": []},
+        )
 
 
 if __name__ == "__main__":

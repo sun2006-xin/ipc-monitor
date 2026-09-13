@@ -53,6 +53,8 @@ PyQt 主窗口
 
 验收结束后运行 `python tools/analyze_runtime_soak.py data/logs/runtime_soak.csv`，重点看 `rss_delta_mb`、`max_rss_mb` 和 `thread_delta`；这些指标只描述进程健康趋势，不自动判定业务正确性。
 
+分析器默认只做保守提示：RSS 增量达到 50 MB 或线程增加达到 2 时输出 `REVIEW`，否则输出 `PASS`。阈值用于决定是否复查，不等于已经证明存在泄漏。
+
 ## 下一阶段迭代入口
 
 1. 为断流重连、录像文件轮转和事件冷却增加可重复测试。
