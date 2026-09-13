@@ -18,6 +18,7 @@ IPC-Monitor 是一个面向 Windows 的多路 RTSP 摄像头监控与本地人�
 - 配置、人脸库、日志、截图和录像均保存在本机，不上传外部服务。
 - 提供帧处理耗时、P95 延迟、处理帧数、丢帧数和窗口 FPS 的性能诊断指标，为多路线程化优化提供基线。
 - 采集线程与 UI 定时器分离，使用最新帧缓冲，降低 RTSP 读取和推理对界面响应的影响。
+- 人脸检测和运动检测在后台分析线程执行，结果通过 Qt 信号回到界面；识别、告警和绘制仍由 UI 线程统一处理。
 
 ## 直接运行 EXE
 
@@ -79,6 +80,7 @@ ipc-monitor/
 │  ├─ motion_engine.py            运动检测
 │  ├─ reconnect_policy.py         非阻塞重连退避策略
 │  ├─ capture_thread.py           采集线程与最新帧缓冲
+│  ├─ analysis_thread.py          人脸/运动分析线程
 │  └─ video_manager.py            兼容旧名称的线程入口
 ├─ ui/
 │  ├─ video_widget.py             单路采集、检测、录像与事件显示

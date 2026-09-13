@@ -10,6 +10,7 @@ from core.app_paths import U
 from core.reconnect_policy import ReconnectPolicy
 from core.performance_metrics import FrameMetrics
 from core.capture_thread import CaptureThread
+from core.analysis_thread import AnalysisThread
 
 class VideoWidget(QWidget):
     double_clicked = pyqtSignal()
@@ -103,6 +104,7 @@ class VideoWidget(QWidget):
         # 核心变量
         self.cap = None
         self.capture_thread = None
+        self.analysis_thread = None
         self.rtsp_url = None
         self.current_pixmap = None
         self.current_frame = None
@@ -245,6 +247,13 @@ class VideoWidget(QWidget):
             self.capture_thread = CaptureThread(rtsp_url, fps=30, parent=self)
             self.capture_thread.status_changed.connect(self.set_connected)
             self.capture_thread.start()
+            self.analysis_thread = AnalysisThread(
+                face_engine=self.face_engine,
+                motion_engine=self.motion_engine,
+                parent=self,
+            )
+            self.analysis_thread.result_ready.connect(self._on_analysis_result)
+            self.analysis_thread.start()
         except Exception as e:
             print(f"❌ [VideoWidget] 创建采集线程异常: {e}")
             self.capture_thread = None
@@ -271,6 +280,12 @@ class VideoWidget(QWidget):
             except Exception as e:
                 print(f"[VideoWidget] 停止采集线程异常: {e}")
             self.capture_thread = None
+        if self.analysis_thread is not None:
+            try:
+                self.analysis_thread.stop()
+            except Exception as e:
+                print(f"[VideoWidget] 停止分析线程异常: {e}")
+            self.analysis_thread = None
         # 兼容旧路径：若有遗留 cap，也安全释放。
         if self.cap is not None:
             try:
@@ -332,6 +347,85 @@ class VideoWidget(QWidget):
     def get_performance_snapshot(self):
         """Return a cheap snapshot for diagnostics and future multi-camera dashboards."""
         return self.performance_metrics.snapshot()
+
+    def _submit_analysis(self, frame):
+        if self.analysis_thread is None:
+            return
+        run_face = bool(
+            self.face_interval > 0
+            and self.frame_counter % self.face_interval == 0
+            and self.face_engine
+        )
+        run_motion = bool(
+            self.motion_interval > 0
+            and self.frame_counter % self.motion_interval == 0
+            and self.motion_engine
+        )
+        if run_face or run_motion:
+            self.analysis_thread.submit(
+                frame,
+                self.frame_counter,
+                run_face=run_face,
+                run_motion=run_motion,
+            )
+
+    def _on_analysis_result(self, result):
+        """Apply worker results on the UI thread and preserve existing alarms."""
+        if getattr(self, '_destroying', False):
+            return
+        frame = result.get("frame")
+        errors = result.get("errors") or []
+        if errors:
+            print(f"[VideoWidget] 后台分析异常: {'; '.join(errors)}")
+        if result.get("face_ran"):
+            self.last_face_detections = result["face_detections"]
+            rec_results = []
+            any_stranger = False
+            if self.face_recognizer is not None:
+                for det in self.last_face_detections:
+                    bbox = det.get('bbox')
+                    if not bbox:
+                        continue
+                    try:
+                        name, is_stranger, distance, _enc = self.face_recognizer.recognize_from_frame(frame, bbox)
+                    except Exception as exc:
+                        print(f"[VideoWidget] recognize_from_frame 异常: {exc}")
+                        name, is_stranger, distance = None, False, -1.0
+                    if name is None:
+                        continue
+                    rec_results.append({
+                        'bbox': list(bbox),
+                        'name': name,
+                        'is_stranger': bool(is_stranger),
+                        'distance': float(distance) if distance and distance >= 0 else 0.0,
+                    })
+                    any_stranger = any_stranger or bool(is_stranger)
+            self._last_face_rec_results = rec_results
+            if frame is not None:
+                self._trigger_event("face", frame)
+                if any_stranger:
+                    now_s = time.time()
+                    if now_s - self._last_stranger_time >= self._stranger_cooldown:
+                        self._last_stranger_time = now_s
+                        try:
+                            subdir = "faces"
+                            os.makedirs(os.path.join(self.data_root, subdir), exist_ok=True)
+                            name_cn = self.name_label.text()
+                            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                            fname = os.path.join(self.data_root, subdir, f"陌生人_{name_cn}_{ts}.jpg")
+                            if cv2.imwrite(fname, frame):
+                                self.event_triggered.emit("stranger", name_cn, fname)
+                        except Exception as exc:
+                            print(f"[VideoWidget] 陌生人告警存图/emit异常: {exc}")
+        if result.get("motion_ran"):
+            self.last_motion_rects = result.get("motion_rects") or []
+            if self.last_motion_rects:
+                now = time.time()
+                self._absence_last_motion_time = now
+                if self._absence_already_fired:
+                    self._absence_already_fired = False
+                if self.motion_alarm and frame is not None:
+                    self._trigger_event("motion", frame)
 
     def _save_frame(self, frame, subdir):
         try:
@@ -497,8 +591,11 @@ class VideoWidget(QWidget):
             except Exception:
                 pass
 
+            # 推理线程只在检测周期提交最新帧；其结果通过信号回到 UI 线程。
+            self._submit_analysis(frame)
+
             # 检测（仅更新缓存）—— 降低 CPU 占用，避免 UI 卡死
-            if self.face_interval > 0 and (self.frame_counter % self.face_interval == 0) and self.face_engine:
+            if self.analysis_thread is None and self.face_interval > 0 and (self.frame_counter % self.face_interval == 0) and self.face_engine:
                 try:
                     # C4：检测吃 CLAHE 增强后的 detect_frame（暗光下脸能被 YOLO 真检到），但后面所有画图/录像/存图仍用原始 frame（真实不偏色）
                     self.last_face_detections = self.face_engine.detect(detect_frame)
@@ -564,7 +661,7 @@ class VideoWidget(QWidget):
                     self.last_face_detections = []
                     self._last_face_rec_results = []
 
-            if self.motion_interval > 0 and (self.frame_counter % self.motion_interval == 0) and self.motion_engine:
+            if self.analysis_thread is None and self.motion_interval > 0 and (self.frame_counter % self.motion_interval == 0) and self.motion_engine:
                 try:
                     self.last_motion_rects = self.motion_engine.detect(detect_frame)   # C4：运动检测也吃增强帧（暗光下人影晃动能被真识别）
                     if self.last_motion_rects and self.motion_alarm:
