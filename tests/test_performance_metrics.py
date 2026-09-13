@@ -1,6 +1,7 @@
 import unittest
 
 from core.performance_metrics import FrameMetrics
+from ui.video_widget import VideoWidget
 
 
 class FrameMetricsTests(unittest.TestCase):
@@ -26,6 +27,15 @@ class FrameMetricsTests(unittest.TestCase):
         self.assertEqual(snapshot["dropped_frames"], 1)
         self.assertEqual(snapshot["sample_count"], 2)
         self.assertAlmostEqual(snapshot["p95_frame_ms"], 25.0)
+
+    def test_video_snapshot_includes_analysis_queue_drops(self):
+        widget = VideoWidget.__new__(VideoWidget)
+        widget.performance_metrics = FrameMetrics()
+        widget.analysis_thread = type("Thread", (), {"dropped_requests": 3})()
+
+        snapshot = widget.get_performance_snapshot()
+
+        self.assertEqual(snapshot["analysis_dropped_requests"], 3)
 
 
 if __name__ == "__main__":

@@ -358,7 +358,12 @@ class VideoWidget(QWidget):
 
     def get_performance_snapshot(self):
         """Return a cheap snapshot for diagnostics and future multi-camera dashboards."""
-        return self.performance_metrics.snapshot()
+        snapshot = self.performance_metrics.snapshot()
+        snapshot["analysis_dropped_requests"] = (
+            int(self.analysis_thread.dropped_requests)
+            if self.analysis_thread is not None else 0
+        )
+        return snapshot
 
     def _submit_analysis(self, frame):
         if self.analysis_thread is None:
