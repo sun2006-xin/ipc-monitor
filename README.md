@@ -18,6 +18,7 @@ IPC-Monitor 是一个面向 Windows 的多路 RTSP 摄像头监控与本地人�
 - 配置、人脸库、日志、截图和录像均保存在本机，不上传外部服务。
 - 提供帧处理耗时、P95 延迟、处理帧数、丢帧数和窗口 FPS 的性能诊断指标，为多路线程化优化提供基线。
 - 提供 `tools/run_runtime_soak.py`，在真实摄像头验收时只记录进程内存、线程数和 CPU 趋势，不保存视频或摄像头配置。
+- 提供 `tools/analyze_runtime_soak.py data/logs/runtime_soak.csv`，汇总起止 RSS、最大 RSS、线程变化和平均 CPU。
 - 采集线程与 UI 定时器分离，使用最新帧缓冲，降低 RTSP 读取和推理对界面响应的影响。
 - 人脸检测、运动检测和 dlib 人脸识别在后台分析线程执行，结果通过 Qt 信号回到界面；告警、截图、画框和录像仍由 UI 线程统一处理。
 - 可运行 `python tools/run_performance_benchmark.py --frames 30` 生成 1/4/9 路合成基线；报告包含 P95、FPS、队列丢弃和结果帧号，仅用于验证线程边界与指标链路，不代替真实摄像头压测。

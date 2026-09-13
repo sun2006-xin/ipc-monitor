@@ -51,6 +51,8 @@ PyQt 主窗口
 
 真实设备的长时间验收使用 `python tools/run_runtime_soak.py --pid <PID> --duration-minutes 30 --interval-seconds 10`，输出 CSV 只包含 UTC 时间、PID、RSS 内存、线程数和 CPU 百分比。它不能替代摄像头画面正确性测试，但能帮助判断运行期间是否持续增长。
 
+验收结束后运行 `python tools/analyze_runtime_soak.py data/logs/runtime_soak.csv`，重点看 `rss_delta_mb`、`max_rss_mb` 和 `thread_delta`；这些指标只描述进程健康趋势，不自动判定业务正确性。
+
 ## 下一阶段迭代入口
 
 1. 为断流重连、录像文件轮转和事件冷却增加可重复测试。
