@@ -6,7 +6,8 @@
 PyQt 主窗口
   └─ GridLayoutWidget
       └─ VideoWidget（每路摄像头一个）
-          ├─ OpenCV VideoCapture：读取 RTSP/本地摄像头帧
+          ├─ CaptureThread（逐步接入）：读取 RTSP/本地摄像头帧
+          │   └─ LatestFrameBuffer：只保留最新帧，避免推理延迟堆积
           ├─ reconnect_policy：按单调时钟做指数退避重连
           ├─ face_engine：OpenCV DNN + best.onnx 人脸检测
           ├─ face_recognizer：可选 dlib 特征提取与本地人脸库匹配
@@ -24,7 +25,7 @@ PyQt 主窗口
 
 ## 稳定性说明
 
-当前 `VideoWidget` 使用 Qt 定时器驱动采集，便于保持现有 UI 行为和录像/事件逻辑一致。`core/video_manager.py` 中的 `VideoThread` 是早期线程封装，当前没有被主窗口使用；后续如需提升多路性能，应先用基准测试验证，再将“采集线程”和“UI 更新”拆分，避免重复实现两套生命周期。
+当前 `VideoWidget` 仍使用 Qt 定时器驱动采集，便于保持现有 UI 行为和录像/事件逻辑一致。新增 `CaptureThread` 和 `LatestFrameBuffer` 作为可测试的采集基础，下一切片才接入主控件；`core/video_manager.py` 的 `VideoThread` 仅保留兼容别名，避免重复维护两套线程实现。
 
 配置保存使用临时文件加 `os.replace`，重连使用 `core/reconnect_policy.py` 的单调时间退避；这两部分都不在 UI 线程中阻塞等待。
 
