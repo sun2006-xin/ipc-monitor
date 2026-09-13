@@ -918,48 +918,7 @@ class VideoWidget(QWidget):
             #   逻辑：在线 + _schedule_record_enabled=True → 自动 is_recording；跨小时自动切新文件
             #   这样用户演示"挂一整晚录像"不用每个通道手动 ●录像，第二天直接按小时看片
             # ================================================================
-            try:
-                should_record = bool(self._schedule_record_enabled)
-                if should_record:
-                    # 每小时分片键：YYYYMMDD_HH（变了就切一份新 MP4）
-                    hour_key = datetime.now().strftime("%Y%m%d_%H")
-                    if not self.is_recording or self._record_hour_key != hour_key:
-                        if self.is_recording:
-                            try: self.stop_record()
-                            except Exception: pass
-                        self._record_hour_key = hour_key
-                        # 启动新小时分片录像（跟 toggle_record 的 start_record 同尺寸逻辑，但文件名带 B2_小时分片前缀）
-                        try:
-                            name_cn = self.name_label.text()
-                            ts = datetime.now().strftime("%Y%m%d_%H00")
-                            rec_dir = os.path.join(self.data_root, "records")
-                            os.makedirs(rec_dir, exist_ok=True)
-                            fname = os.path.join(rec_dir, f"B2定时分片_{name_cn}_{ts}.mp4")
-                            if self.cap is not None:
-                                fw = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 640)
-                                fh = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 480)
-                            else:
-                                fh, fw = frame.shape[:2]
-                            if fw > 0 and fh > 0:
-                                self._frame_size = (fw, fh)
-                                try:
-                                    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                                except Exception:
-                                    fourcc = cv2.VideoWriter_fourcc(*'XVID')
-                                self.video_writer = cv2.VideoWriter(fname, fourcc, 15.0, (fw, fh))
-                                if self.video_writer and self.video_writer.isOpened():
-                                    self.is_recording = True
-                        except Exception as _b2e:
-                            print(f"[VideoWidget][B2] 小时分片录像启动异常: {_b2e}")
-                            self.is_recording = False
-                else:
-                    # 定时录像被 MainWindow 关闭 → 如果当前录的是 B2 自动分片（不是用户手动 ●录像）就停掉
-                    if self.is_recording and self._record_hour_key:
-                        try: self.stop_record()
-                        except Exception: pass
-                        self._record_hour_key = ""
-            except Exception as _b2e2:
-                print(f"[VideoWidget][B2] 定时录像逻辑异常: {_b2e2}")
+            self._ensure_scheduled_recording(frame)
 
             # 录像（原代码保留：手动 ●录像 和 B2 定时分片 共享同一个 is_recording 分支写帧）
             if self.is_recording and self.video_writer is not None:
@@ -1035,9 +994,9 @@ class VideoWidget(QWidget):
     def start_record(self):
         if getattr(self, '_destroying', False):
             return False
+
         if self.is_recording:
             return False
-        # ✅ 关键：VideoWriter 的尺寸必须来自真实帧 current_frame，不能来自 QPixmap（UI 缩放后尺寸不匹配 → 写入失败/编码器崩溃）
         if self.current_frame is None:
             return False
         try:
@@ -1066,6 +1025,45 @@ class VideoWidget(QWidget):
             self.is_recording = False
             return False
 
+    def _ensure_scheduled_recording(self, frame, now=None):
+        """Start or rotate the hourly scheduled writer without touching UI state."""
+        try:
+            should_record = bool(self._schedule_record_enabled)
+            if should_record:
+                now = now or datetime.now()
+                hour_key = now.strftime("%Y%m%d_%H")
+                if not self.is_recording or self._record_hour_key != hour_key:
+                    if self.is_recording:
+                        self.stop_record()
+                    self._record_hour_key = hour_key
+                    try:
+                        name_cn = self.name_label.text()
+                        ts = now.strftime("%Y%m%d_%H00")
+                        rec_dir = os.path.join(self.data_root, "records")
+                        os.makedirs(rec_dir, exist_ok=True)
+                        fname = os.path.join(rec_dir, f"B2定时分片_{name_cn}_{ts}.mp4")
+                        if self.cap is not None:
+                            fw = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 640)
+                            fh = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 480)
+                        else:
+                            fh, fw = frame.shape[:2]
+                        if fw > 0 and fh > 0:
+                            self._frame_size = (fw, fh)
+                            try:
+                                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                            except Exception:
+                                fourcc = cv2.VideoWriter_fourcc(*'XVID')
+                            self.video_writer = cv2.VideoWriter(fname, fourcc, 15.0, (fw, fh))
+                            if self.video_writer and self.video_writer.isOpened():
+                                self.is_recording = True
+                    except Exception as _b2e:
+                        print(f"[VideoWidget][B2] 小时分片录像启动异常: {_b2e}")
+                        self.is_recording = False
+            elif self.is_recording and self._record_hour_key:
+                self.stop_record()
+                self._record_hour_key = ""
+        except Exception as _b2e2:
+            print(f"[VideoWidget][B2] 定时录像逻辑异常: {_b2e2}")
     def stop_record(self):
         writer = self.video_writer
         self.video_writer = None
