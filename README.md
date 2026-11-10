@@ -1,5 +1,9 @@
 # IPC-Monitor
 
+![IPC-Monitor Windows 多路 RTSP 摄像头监控系统界面与项目定位](docs/images/hero.png)
+
+> 主界面截图；画面中的视频区域为空，项目当前未连接摄像头。
+
 IPC-Monitor 是一套运行于 Windows 的多路 RTSP 摄像头监控系统，用于统一查看多个视频通道，并进行人脸检测与识别、运动监测、事件告警、录像回放和本地数据管理。
 
 当前开发版本：`1.2.0-dev`。`main` 是 `v1.1.0` 之后的持续开发主线，下一次正式版本将在固定视频性能基准和发布工程收口后再发布。
@@ -32,10 +36,40 @@ IPC-Monitor 是一套运行于 Windows 的多路 RTSP 摄像头监控系统，�
 - GitHub Actions 会在 `main` 和 Pull Request 上自动执行测试、源码编译和空白检查。
 - 主界面底部诊断栏每秒汇总实际占用通道的分析丢弃数、最近分析帧和最近告警帧，便于排查“告警截图是否落后”。
 
+![IPC-Monitor 主要功能总览](docs/images/capability-map.png)
+
+> 功能示意图；实际界面和摄像头画面以程序运行状态为准。
+
 ## 验证方式
 
 - 没有摄像头时，可使用仓库中的固定录像和 fake capture 验证线程、录像、告警证据和资源释放；这类结果不替代真实 RTSP 验收。
 - 固定视频真实模型基准建议从单路、少帧数开始，再逐步扩展到 1/4/9 路；如果 Windows 可用虚拟内存不足，应记录为环境阻断并分批运行。
+
+## 系统架构与算法
+
+### 视频采集与线程边界
+
+![视频采集、最新帧缓冲、后台分析线程与 Qt 界面的数据流](docs/images/threaded-architecture.png)
+
+采集线程负责读取视频，最新帧缓冲限制排队长度；分析结果通过 Qt 信号回到界面线程。更多模块边界见 [架构说明](docs/ARCHITECTURE.md)。
+
+### 人脸识别与运动检测
+
+![人脸检测与识别、MOG2 运动检测的处理流程](docs/images/face-motion-algorithms.png)
+
+人脸链路使用 ONNX 检测、dlib 128 维特征和本地人脸库比对；运动链路使用 MOG2 背景建模、形态学处理与区域筛选。当前运动分析不包含人体姿态或跌倒识别。
+
+### 实时帧调度
+
+![最新帧优先策略与合成队列压力测试结果](docs/images/latest-frame-strategy.png)
+
+图中的 12 次提交、11 次替换丢弃和 1 次处理来自合成队列压力测试，只用于说明最新帧策略，不代表真实 RTSP 吞吐或摄像头性能。
+
+### 本地数据与隐私
+
+![RTSP 视频本地处理和运行数据本机保存示意](docs/images/local-data-privacy.png)
+
+设备配置、人脸库、日志、截图和录像由程序保存在本地数据目录；仓库不包含默认摄像头配置。
 
 ## 后续路线
 
@@ -89,6 +123,8 @@ python -m pip install -r requirements-optional-yolo.txt
 真实配置保存在 `data/config.json`，该文件已被 `.gitignore` 排除。请勿将真实配置、人脸数据、截图、录像或日志提交到公开仓库。
 
 ## 项目结构
+
+![IPC-Monitor 仓库主要目录与模块分工](docs/images/repository-structure.png)
 
 ```text
 ipc-monitor/
@@ -163,6 +199,8 @@ python -m compileall -q core ui main.py tests
 请使用 Python 3.11，并优先安装与当前 Python 版本和系统架构匹配的预编译 wheel。源码编译 dlib 需要 Visual Studio C++ Build Tools 和 CMake。
 
 ## 隐私与安全
+
+视频流通过 RTSP 输入并由本机程序处理。下图展示的是本地处理和数据目录关系；项目不会因此自动提供网络隔离或设备侧安全保障。
 
 - 仓库和发布包不包含真实摄像头地址、密码或作者本机配置。
 - RTSP 地址写入日志前会隐藏密码。
